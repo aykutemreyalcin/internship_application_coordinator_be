@@ -25,14 +25,14 @@ class GeminiServiceTest {
 
     @Test
     void pingReturnsGeminiResponse() {
-        when(vertexAiProperties.modelName()).thenReturn("gemini-2.0-flash-001");
+        when(vertexAiProperties.modelName()).thenReturn("gemini-2.5-flash");
         when(geminiClient.generateText("Reply with exactly one word: pong")).thenReturn("pong");
 
         var response = geminiService.ping();
 
         assertEquals("Reply with exactly one word: pong", response.prompt());
         assertEquals("pong", response.response());
-        assertEquals("gemini-2.0-flash-001", response.modelName());
+        assertEquals("gemini-2.5-flash", response.modelName());
         verify(geminiClient).generateText("Reply with exactly one word: pong");
     }
 }

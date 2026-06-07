@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
             "app.vertex-ai.enabled=true",
             "app.vertex-ai.project-id=${GCP_PROJECT_ID}",
             "app.vertex-ai.region=${GCP_REGION:europe-west1}",
-            "app.vertex-ai.model-name=${GCP_GEMINI_MODEL:gemini-2.0-flash-001}"
+            "app.vertex-ai.model-name=${GCP_GEMINI_MODEL:gemini-2.5-flash}"
         })
 @EnabledIfEnvironmentVariable(named = "VERTEX_AI_LIVE_TEST", matches = "true")
 class GeminiLiveIntegrationTest {

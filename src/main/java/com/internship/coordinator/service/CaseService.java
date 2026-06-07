@@ -3,10 +3,12 @@ package com.internship.coordinator.service;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.DocumentSummaryDto;
+import com.internship.coordinator.dto.ExtractedApplicationData;
 import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
+import com.internship.coordinator.agent.DocumentExtractionAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
 import com.internship.coordinator.model.CaseStatus;
@@ -15,10 +17,16 @@ import com.internship.coordinator.model.ValidationResult;
 import com.internship.coordinator.model.ValidationType;
 import com.internship.coordinator.repository.ApplicationCaseRepository;
 import com.internship.coordinator.repository.ApplicationDocumentRepository;
+import com.internship.coordinator.util.PdfPageCounter;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,10 +39,15 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class CaseService {
 
+    private static final Set<CaseStatus> EXTRACTABLE_STATUSES = EnumSet.of(
+            CaseStatus.NEW, CaseStatus.NEEDS_CLARIFICATION, CaseStatus.CLARIFICATION_REQUESTED);
+
     private final ApplicationCaseRepository applicationCaseRepository;
     private final ApplicationDocumentRepository applicationDocumentRepository;
     private final DocumentStorageService documentStorageService;
     private final PdfFileValidator pdfFileValidator;
+    private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
+    private final PdfPageCounter pdfPageCounter;
 
     public PageResponse<CaseSummaryResponse> listCases(CaseStatus status, String search, Pageable pageable) {
         Specification<ApplicationCase> specification = CaseSpecifications.withFilters(status, search);
@@ -90,6 +103,64 @@ public class CaseService {
                 .orElseThrow(() -> new DocumentNotFoundException(caseId, documentId));
 
         return new StoredDocument(document.getFileName(), documentStorageService.loadAsResource(document.getStoragePath()));
+    }
+
+    @Transactional
+    public CaseDetailResponse extractCase(UUID caseId) {
+        DocumentExtractionAgent documentExtractionAgent = documentExtractionAgentProvider.getIfAvailable();
+        if (documentExtractionAgent == null) {
+            throw new CaseExtractionException("Document extraction is disabled. Enable Vertex AI to extract documents.");
+        }
+
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        if (applicationCase.getStatus() == CaseStatus.EXTRACTING) {
+            throw new CaseExtractionException("Extraction is already in progress for this case");
+        }
+        if (!EXTRACTABLE_STATUSES.contains(applicationCase.getStatus())) {
+            throw new CaseExtractionException("Case status does not allow extraction: " + applicationCase.getStatus());
+        }
+
+        ApplicationDocument document = applicationCase.getDocuments().stream()
+                .findFirst()
+                .orElseThrow(() -> new CaseExtractionException("Case has no uploaded document to extract"));
+
+        applicationCase.setStatus(CaseStatus.EXTRACTING);
+        applicationCaseRepository.save(applicationCase);
+
+        byte[] pdfBytes = documentStorageService.readBytes(document.getStoragePath());
+        ExtractedApplicationData extractedData = documentExtractionAgent.extract(pdfBytes);
+
+        applyExtractedData(applicationCase, extractedData);
+        document.setPageCount(pdfPageCounter.countPages(pdfBytes));
+        applicationCase.setStatus(CaseStatus.NEW);
+        applicationCaseRepository.save(applicationCase);
+
+        return toDetail(applicationCase);
+    }
+
+    private void applyExtractedData(ApplicationCase applicationCase, ExtractedApplicationData extractedData) {
+        applicationCase.setStudentName(extractedData.studentName());
+        applicationCase.setStudentId(extractedData.studentId());
+        applicationCase.setFieldOfStudy(extractedData.fieldOfStudy());
+        applicationCase.setCompanyName(extractedData.companyName());
+        applicationCase.setSupervisorName(extractedData.supervisorName());
+        applicationCase.setSupervisorEmail(extractedData.supervisorEmail());
+        applicationCase.setInternshipStartDate(parseDate(extractedData.internshipStartDate()));
+        applicationCase.setInternshipEndDate(parseDate(extractedData.internshipEndDate()));
+    }
+
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new ExtractionParseException("Invalid date in extraction response: " + value, exception);
+        }
     }
 
     private CaseSummaryResponse toSummary(ApplicationCase applicationCase) {

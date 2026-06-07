@@ -35,6 +35,14 @@ public class DocumentStorageService {
         return new FileSystemResource(filePath);
     }
 
+    public byte[] readBytes(String relativePath) {
+        try {
+            return Files.readAllBytes(resolve(relativePath));
+        } catch (IOException exception) {
+            throw new DocumentStorageException("Failed to read stored file: " + relativePath, exception);
+        }
+    }
+
     private Path resolve(String relativePath) {
         Path resolved = uploadRoot.resolve(relativePath).normalize();
         if (!resolved.startsWith(uploadRoot)) {
