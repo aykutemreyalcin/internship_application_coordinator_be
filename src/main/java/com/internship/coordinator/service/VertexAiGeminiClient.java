@@ -38,6 +38,23 @@ public class VertexAiGeminiClient implements GeminiClient {
     }
 
     @Override
+    public String generateJson(String prompt) {
+        try {
+            GenerativeModel jsonModel = new GenerativeModel.Builder()
+                    .setModelName(vertexAiProperties.modelName())
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setResponseMimeType("application/json")
+                            .build())
+                    .build();
+            GenerateContentResponse response = jsonModel.generateContent(prompt);
+            return ResponseHandler.getText(response);
+        } catch (IOException exception) {
+            throw new GeminiException("Gemini JSON request failed", exception);
+        }
+    }
+
+    @Override
     public String generateFromPdf(byte[] pdfBytes, String prompt) {
         try {
             GenerativeModel extractionModel = new GenerativeModel.Builder()

@@ -9,6 +9,7 @@ import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.agent.CompletenessValidationAgent;
+import com.internship.coordinator.agent.DecisionRecommendationAgent;
 import com.internship.coordinator.agent.DocumentExtractionAgent;
 import com.internship.coordinator.agent.UniversityRulesAgent;
 import com.internship.coordinator.model.ApplicationCase;
@@ -44,11 +45,15 @@ public class CaseService {
     private static final Set<CaseStatus> EXTRACTABLE_STATUSES = EnumSet.of(
             CaseStatus.NEW, CaseStatus.NEEDS_CLARIFICATION, CaseStatus.CLARIFICATION_REQUESTED);
 
+    private static final Set<CaseStatus> RECOMMENDABLE_STATUSES = EnumSet.of(
+            CaseStatus.NEW, CaseStatus.NEEDS_CLARIFICATION, CaseStatus.CLARIFICATION_REQUESTED);
+
     private final ApplicationCaseRepository applicationCaseRepository;
     private final ApplicationDocumentRepository applicationDocumentRepository;
     private final DocumentStorageService documentStorageService;
     private final PdfFileValidator pdfFileValidator;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
+    private final ObjectProvider<DecisionRecommendationAgent> decisionRecommendationAgentProvider;
     private final CompletenessValidationAgent completenessValidationAgent;
     private final UniversityRulesAgent universityRulesAgent;
     private final PdfPageCounter pdfPageCounter;
@@ -123,6 +128,36 @@ public class CaseService {
         applicationCaseRepository.save(applicationCase);
 
         return toValidationSummary(applicationCase.getValidationResults());
+    }
+
+    @Transactional
+    public CaseDetailResponse generateRecommendation(UUID caseId) {
+        DecisionRecommendationAgent decisionRecommendationAgent =
+                decisionRecommendationAgentProvider.getIfAvailable();
+        if (decisionRecommendationAgent == null) {
+            throw new CaseRecommendationException(
+                    "Recommendation generation is disabled. Enable Vertex AI to generate recommendations.");
+        }
+
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        if (!RECOMMENDABLE_STATUSES.contains(applicationCase.getStatus())) {
+            throw new CaseRecommendationException(
+                    "Case status does not allow recommendation: " + applicationCase.getStatus());
+        }
+
+        runValidations(applicationCase);
+        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+        var generatedRecommendation = decisionRecommendationAgent.recommend(applicationCase, validation);
+
+        applicationCase.setRecommendation(generatedRecommendation.recommendation());
+        applicationCase.setRecommendationReason(generatedRecommendation.reason());
+        applicationCase.setStatus(CaseStatus.READY_FOR_REVIEW);
+        applicationCaseRepository.save(applicationCase);
+
+        return toDetail(applicationCase);
     }
 
     @Transactional
