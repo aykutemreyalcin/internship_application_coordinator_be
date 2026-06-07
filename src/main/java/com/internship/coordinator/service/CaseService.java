@@ -3,6 +3,7 @@ package com.internship.coordinator.service;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.ClarificationDraftResponse;
+import com.internship.coordinator.dto.CoordinatorDecisionRequest;
 import com.internship.coordinator.dto.DocumentSummaryDto;
 import com.internship.coordinator.dto.ExtractedApplicationData;
 import com.internship.coordinator.dto.PageResponse;
@@ -18,12 +19,14 @@ import com.internship.coordinator.agent.SupervisorVerificationAgent;
 import com.internship.coordinator.agent.UniversityRulesAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
+import com.internship.coordinator.model.AuditLogEntry;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.model.ValidationIssue;
 import com.internship.coordinator.model.ValidationResult;
 import com.internship.coordinator.model.ValidationType;
 import com.internship.coordinator.repository.ApplicationCaseRepository;
 import com.internship.coordinator.repository.ApplicationDocumentRepository;
+import com.internship.coordinator.util.CaseStateMachine;
 import com.internship.coordinator.util.PdfPageCounter;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -74,6 +77,7 @@ public class CaseService {
     private final ObjectProvider<SupervisorVerificationAgent> supervisorVerificationAgentProvider;
     private final CompletenessValidationAgent completenessValidationAgent;
     private final UniversityRulesAgent universityRulesAgent;
+    private final CaseStateMachine caseStateMachine;
     private final PdfPageCounter pdfPageCounter;
 
     public PageResponse<CaseSummaryResponse> listCases(CaseStatus status, String search, Pageable pageable) {
@@ -251,6 +255,42 @@ public class CaseService {
                 applicationCase.getSupervisorEmail(),
                 draft.subject(),
                 draft.body());
+    }
+
+    @Transactional
+    public CaseDetailResponse applyCoordinatorDecision(UUID caseId, CoordinatorDecisionRequest request) {
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        CaseStatus currentStatus = applicationCase.getStatus();
+        if (!caseStateMachine.allowsCoordinatorDecision(currentStatus)) {
+            throw new CaseDecisionException("Coordinator decision is not allowed from status: " + currentStatus);
+        }
+
+        CaseStatus targetStatus;
+        try {
+            targetStatus = caseStateMachine.resolveCoordinatorDecision(currentStatus, request.decision());
+        } catch (IllegalStateException exception) {
+            throw new CaseDecisionException(exception.getMessage());
+        }
+
+        applicationCase.setStatus(targetStatus);
+        applicationCase.addAuditLogEntry(AuditLogEntry.builder()
+                .actor("COORDINATOR")
+                .action("DECISION_" + request.decision().name())
+                .detail(buildDecisionDetail(request))
+                .build());
+        applicationCaseRepository.save(applicationCase);
+
+        return toDetail(applicationCase);
+    }
+
+    private String buildDecisionDetail(CoordinatorDecisionRequest request) {
+        if (request.note() == null || request.note().isBlank()) {
+            return request.decision().name();
+        }
+        return request.decision().name() + ": " + request.note().trim();
     }
 
     @Transactional

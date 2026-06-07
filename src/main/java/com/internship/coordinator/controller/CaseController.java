@@ -3,12 +3,14 @@ package com.internship.coordinator.controller;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.ClarificationDraftResponse;
+import com.internship.coordinator.dto.CoordinatorDecisionRequest;
 import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.SupervisorVerificationDraftResponse;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
+import com.internship.coordinator.service.CaseDecisionException;
 import com.internship.coordinator.service.CaseExtractionException;
 import com.internship.coordinator.service.CaseClarificationException;
 import com.internship.coordinator.service.CaseRecommendationException;
@@ -34,11 +36,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/cases")
@@ -98,6 +102,12 @@ public class CaseController {
         return caseService.generateSupervisorVerification(id);
     }
 
+    @PostMapping("/{id}/decision")
+    public CaseDetailResponse applyCoordinatorDecision(
+            @PathVariable UUID id, @Valid @RequestBody CoordinatorDecisionRequest request) {
+        return caseService.applyCoordinatorDecision(id, request);
+    }
+
     @GetMapping("/{id}/documents/{docId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
         StoredDocument storedDocument = caseService.getDocument(id, docId);
@@ -141,6 +151,11 @@ public class CaseController {
 
     @ExceptionHandler(CaseSupervisorVerificationException.class)
     public ResponseEntity<Void> handleCaseSupervisorVerification(CaseSupervisorVerificationException exception) {
+        return ResponseEntity.badRequest().build();
+    }
+
+    @ExceptionHandler(CaseDecisionException.class)
+    public ResponseEntity<Void> handleCaseDecision(CaseDecisionException exception) {
         return ResponseEntity.badRequest().build();
     }
 
