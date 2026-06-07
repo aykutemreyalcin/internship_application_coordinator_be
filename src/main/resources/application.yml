@@ -2,7 +2,9 @@ spring:
   application:
     name: internship-application-coordinator
   config:
-    import: optional:file:.env[.properties]
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:.env.local[.properties]
   profiles:
     active: local
   servlet:
@@ -17,3 +19,8 @@ app:
   storage:
     upload-dir: ${UPLOAD_DIR:uploads}
     max-file-size-bytes: ${MAX_UPLOAD_SIZE_BYTES:10485760}
+  vertex-ai:
+    enabled: ${VERTEX_AI_ENABLED:false}
+    project-id: ${GCP_PROJECT_ID:}
+    region: ${GCP_REGION:europe-west1}
+    model-name: ${GCP_GEMINI_MODEL:gemini-2.5-flash}

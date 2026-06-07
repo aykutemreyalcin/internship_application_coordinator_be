@@ -38,6 +38,9 @@ build/
 *.log
 .DS_Store
 uploads/
+
+# GCP service account keys — never commit
 credentials/
+credentials/**
 *-credentials.json
 service-account*.json

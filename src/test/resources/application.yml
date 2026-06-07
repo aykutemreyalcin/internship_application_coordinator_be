@@ -17,3 +17,8 @@ app:
   storage:
     upload-dir: ${java.io.tmpdir}/iac-test-uploads
     max-file-size-bytes: 10485760
+  vertex-ai:
+    enabled: false
+    project-id: test-project
+    region: europe-west1
+    model-name: gemini-2.0-flash-001
