@@ -2,7 +2,9 @@ spring:
   application:
     name: internship-application-coordinator
   config:
-    import: optional:file:.env[.properties]
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:.env.local[.properties]
   profiles:
     active: local
   servlet:
@@ -21,4 +23,4 @@ app:
     enabled: ${VERTEX_AI_ENABLED:false}
     project-id: ${GCP_PROJECT_ID:}
     region: ${GCP_REGION:europe-west1}
-    model-name: ${GCP_GEMINI_MODEL:gemini-2.0-flash-001}
+    model-name: ${GCP_GEMINI_MODEL:gemini-2.5-flash}
