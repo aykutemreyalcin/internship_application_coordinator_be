@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: internship-application-coordinator
+  profiles:
+    active: local
+
+server:
+  port: 8080
