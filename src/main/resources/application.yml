@@ -1,6 +1,8 @@
 spring:
   application:
     name: internship-application-coordinator
+  config:
+    import: optional:file:.env[.properties]
   profiles:
     active: local
 
