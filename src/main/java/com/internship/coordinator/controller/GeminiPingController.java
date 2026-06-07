@@ -1,12 +1,9 @@
 package com.internship.coordinator.controller;
 
 import com.internship.coordinator.dto.GeminiPingResponse;
-import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.GeminiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,10 +19,5 @@ public class GeminiPingController {
     @GetMapping("/ping")
     public GeminiPingResponse ping() {
         return geminiService.ping();
-    }
-
-    @ExceptionHandler(GeminiException.class)
-    public ResponseEntity<Void> handleGeminiException(GeminiException exception) {
-        return ResponseEntity.internalServerError().build();
     }
 }

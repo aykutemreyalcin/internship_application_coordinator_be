@@ -9,21 +9,11 @@ import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.SupervisorVerificationDraftResponse;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
-import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
-import com.internship.coordinator.service.CaseDecisionException;
-import com.internship.coordinator.service.CaseExtractionException;
-import com.internship.coordinator.service.CaseClarificationException;
-import com.internship.coordinator.service.CaseRecommendationException;
-import com.internship.coordinator.service.DocumentNotFoundException;
-import com.internship.coordinator.service.ExtractionParseException;
-import com.internship.coordinator.service.GeminiException;
-import com.internship.coordinator.service.InvalidFileException;
-import com.internship.coordinator.service.CaseSupervisorVerificationException;
-import com.internship.coordinator.service.ClarificationParseException;
-import com.internship.coordinator.service.RecommendationParseException;
-import com.internship.coordinator.service.SupervisorVerificationParseException;
 import com.internship.coordinator.service.StoredDocument;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,11 +34,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/cases")
 @RequiredArgsConstructor
+@Validated
 public class CaseController {
 
     private static final int DEFAULT_PAGE = 0;
@@ -60,8 +50,8 @@ public class CaseController {
     public PageResponse<CaseSummaryResponse> listCases(
             @RequestParam(required = false) CaseStatus status,
             @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return caseService.listCases(
                 status,
                 search,
@@ -124,56 +114,5 @@ public class CaseController {
                         HttpHeaders.CONTENT_DISPOSITION,
                         "inline; filename=\"" + storedDocument.fileName() + "\"")
                 .body(storedDocument.resource());
-    }
-
-    @ExceptionHandler(CaseNotFoundException.class)
-    public ResponseEntity<Void> handleCaseNotFound(CaseNotFoundException exception) {
-        return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler(DocumentNotFoundException.class)
-    public ResponseEntity<Void> handleDocumentNotFound(DocumentNotFoundException exception) {
-        return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler(InvalidFileException.class)
-    public ResponseEntity<Void> handleInvalidFile(InvalidFileException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler(CaseExtractionException.class)
-    public ResponseEntity<Void> handleCaseExtraction(CaseExtractionException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler(CaseRecommendationException.class)
-    public ResponseEntity<Void> handleCaseRecommendation(CaseRecommendationException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler(CaseClarificationException.class)
-    public ResponseEntity<Void> handleCaseClarification(CaseClarificationException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler(CaseSupervisorVerificationException.class)
-    public ResponseEntity<Void> handleCaseSupervisorVerification(CaseSupervisorVerificationException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler(CaseDecisionException.class)
-    public ResponseEntity<Void> handleCaseDecision(CaseDecisionException exception) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler({
-        ExtractionParseException.class,
-        RecommendationParseException.class,
-        ClarificationParseException.class,
-        SupervisorVerificationParseException.class,
-        GeminiException.class
-    })
-    public ResponseEntity<Void> handleAgentFailure(RuntimeException exception) {
-        return ResponseEntity.internalServerError().build();
     }
 }

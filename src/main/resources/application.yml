@@ -26,6 +26,8 @@ app:
     model-name: ${GCP_GEMINI_MODEL:gemini-2.5-flash}
   university-rules:
     config-path: ${UNIVERSITY_RULES_CONFIG_PATH:classpath:university-rules.json}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   email-intake:
     enabled: ${EMAIL_INTAKE_ENABLED:false}
     mode: ${EMAIL_INTAKE_MODE:imap}
