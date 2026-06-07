@@ -57,4 +57,29 @@ class DocumentExtractionAgentTest {
         assertEquals("2026-11-30", extracted.internshipEndDate());
         verify(geminiClient).generateFromPdf(any(), eq(DocumentExtractionAgent.EXTRACTION_PROMPT));
     }
+
+    @Test
+    void extractParsesJsonWrappedInCodeFence() {
+        when(geminiClient.generateFromPdf(any(), eq(DocumentExtractionAgent.EXTRACTION_PROMPT)))
+                .thenReturn(
+                        """
+                        ```json
+                        {
+                          "studentName": "Jan Kowalski",
+                          "studentId": "123456",
+                          "fieldOfStudy": "Computer Engineering",
+                          "companyName": "Example GmbH",
+                          "supervisorName": "Anna Nowak",
+                          "supervisorEmail": "supervisor@example.com",
+                          "internshipStartDate": "2026-06-01",
+                          "internshipEndDate": "2026-10-28"
+                        }
+                        ```
+                        """);
+
+        ExtractedApplicationData extracted = documentExtractionAgent.extract(new byte[] {1, 2, 3});
+
+        assertEquals("Jan Kowalski", extracted.studentName());
+        assertEquals("123456", extracted.studentId());
+    }
 }
