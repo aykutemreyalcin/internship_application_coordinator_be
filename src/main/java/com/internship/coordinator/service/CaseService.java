@@ -1,5 +1,6 @@
 package com.internship.coordinator.service;
 
+import com.internship.coordinator.dto.AuditLogEntryDto;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.ClarificationDraftResponse;
@@ -19,13 +20,13 @@ import com.internship.coordinator.agent.SupervisorVerificationAgent;
 import com.internship.coordinator.agent.UniversityRulesAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
-import com.internship.coordinator.model.AuditLogEntry;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.model.ValidationIssue;
 import com.internship.coordinator.model.ValidationResult;
 import com.internship.coordinator.model.ValidationType;
 import com.internship.coordinator.repository.ApplicationCaseRepository;
 import com.internship.coordinator.repository.ApplicationDocumentRepository;
+import com.internship.coordinator.repository.AuditLogEntryRepository;
 import com.internship.coordinator.util.CaseStateMachine;
 import com.internship.coordinator.util.PdfPageCounter;
 import java.io.IOException;
@@ -69,6 +70,8 @@ public class CaseService {
 
     private final ApplicationCaseRepository applicationCaseRepository;
     private final ApplicationDocumentRepository applicationDocumentRepository;
+    private final AuditLogEntryRepository auditLogEntryRepository;
+    private final AuditLogService auditLogService;
     private final DocumentStorageService documentStorageService;
     private final PdfFileValidator pdfFileValidator;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
@@ -96,6 +99,16 @@ public class CaseService {
         return toDetail(applicationCase);
     }
 
+    public List<AuditLogEntryDto> getAuditLog(UUID caseId) {
+        if (!applicationCaseRepository.existsById(caseId)) {
+            throw new CaseNotFoundException(caseId);
+        }
+        return auditLogEntryRepository.findByApplicationCaseCaseIdOrderByTimestampAsc(caseId).stream()
+                .map(entry -> new AuditLogEntryDto(
+                        entry.getId(), entry.getActor(), entry.getAction(), entry.getDetail(), entry.getTimestamp()))
+                .toList();
+    }
+
     @Transactional
     public CaseDetailResponse createCaseWithPdf(MultipartFile file) {
         pdfFileValidator.validate(file);
@@ -119,6 +132,7 @@ public class CaseService {
         }
 
         document.setStoragePath(storagePath);
+        auditLogService.record(applicationCase, "SYSTEM", "CASE_CREATED", "Uploaded " + fileName);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
@@ -174,9 +188,16 @@ public class CaseService {
         ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
         var generatedRecommendation = decisionRecommendationAgent.recommend(applicationCase, validation);
 
+        CaseStatus previousStatus = applicationCase.getStatus();
         applicationCase.setRecommendation(generatedRecommendation.recommendation());
         applicationCase.setRecommendationReason(generatedRecommendation.reason());
-        applicationCase.setStatus(CaseStatus.READY_FOR_REVIEW);
+        auditLogService.record(
+                applicationCase,
+                "Decision Recommendation Agent",
+                "RECOMMENDATION",
+                generatedRecommendation.recommendation().name() + ": " + generatedRecommendation.reason());
+        auditLogService.recordStatusChange(
+                applicationCase, "Decision Recommendation Agent", previousStatus, CaseStatus.READY_FOR_REVIEW);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
@@ -207,7 +228,14 @@ public class CaseService {
         }
 
         var draft = clarificationRequestAgent.generateDraft(applicationCase, validation, topics);
-        applicationCase.setStatus(CaseStatus.CLARIFICATION_REQUESTED);
+        CaseStatus previousStatus = applicationCase.getStatus();
+        auditLogService.record(
+                applicationCase,
+                "Clarification Request Agent",
+                "CLARIFICATION_DRAFT",
+                "Generated draft for " + topics.size() + " topic(s): " + String.join("; ", topics));
+        auditLogService.recordStatusChange(
+                applicationCase, "Clarification Request Agent", previousStatus, CaseStatus.CLARIFICATION_REQUESTED);
         applicationCaseRepository.save(applicationCase);
 
         return new ClarificationDraftResponse(
@@ -245,7 +273,14 @@ public class CaseService {
         runValidations(applicationCase);
         ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
         var draft = supervisorVerificationAgent.generateDraft(applicationCase, validation);
-        applicationCase.setStatus(CaseStatus.PENDING_SUPERVISOR);
+        CaseStatus previousStatus = applicationCase.getStatus();
+        auditLogService.record(
+                applicationCase,
+                "Supervisor Verification Agent",
+                "SUPERVISOR_VERIFICATION_DRAFT",
+                "Generated draft for " + applicationCase.getSupervisorEmail());
+        auditLogService.recordStatusChange(
+                applicationCase, "Supervisor Verification Agent", previousStatus, CaseStatus.PENDING_SUPERVISOR);
         applicationCaseRepository.save(applicationCase);
 
         return new SupervisorVerificationDraftResponse(
@@ -275,12 +310,12 @@ public class CaseService {
             throw new CaseDecisionException(exception.getMessage());
         }
 
-        applicationCase.setStatus(targetStatus);
-        applicationCase.addAuditLogEntry(AuditLogEntry.builder()
-                .actor("COORDINATOR")
-                .action("DECISION_" + request.decision().name())
-                .detail(buildDecisionDetail(request))
-                .build());
+        auditLogService.record(
+                applicationCase,
+                "COORDINATOR",
+                "DECISION_" + request.decision().name(),
+                buildDecisionDetail(request));
+        auditLogService.recordStatusChange(applicationCase, "COORDINATOR", currentStatus, targetStatus);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
@@ -291,6 +326,19 @@ public class CaseService {
             return request.decision().name();
         }
         return request.decision().name() + ": " + request.note().trim();
+    }
+
+    private String summarizeExtraction(ExtractedApplicationData extractedData) {
+        return "studentName="
+                + valueOrMissing(extractedData.studentName())
+                + ", studentId="
+                + valueOrMissing(extractedData.studentId())
+                + ", companyName="
+                + valueOrMissing(extractedData.companyName());
+    }
+
+    private String valueOrMissing(String value) {
+        return value == null || value.isBlank() ? "(missing)" : value;
     }
 
     @Transactional
@@ -315,7 +363,9 @@ public class CaseService {
                 .findFirst()
                 .orElseThrow(() -> new CaseExtractionException("Case has no uploaded document to extract"));
 
-        applicationCase.setStatus(CaseStatus.EXTRACTING);
+        CaseStatus previousStatus = applicationCase.getStatus();
+        auditLogService.recordStatusChange(
+                applicationCase, "Document Extraction Agent", previousStatus, CaseStatus.EXTRACTING);
         applicationCaseRepository.save(applicationCase);
 
         byte[] pdfBytes = documentStorageService.readBytes(document.getStoragePath());
@@ -323,16 +373,25 @@ public class CaseService {
 
         applyExtractedData(applicationCase, extractedData);
         document.setPageCount(pdfPageCounter.countPages(pdfBytes));
+        auditLogService.record(
+                applicationCase,
+                "Document Extraction Agent",
+                "EXTRACTION_COMPLETED",
+                summarizeExtraction(extractedData));
         runValidations(applicationCase);
-        applicationCase.setStatus(CaseStatus.NEW);
+        auditLogService.recordStatusChange(
+                applicationCase, "Document Extraction Agent", CaseStatus.EXTRACTING, CaseStatus.NEW);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
     }
 
     private void runValidations(ApplicationCase applicationCase) {
-        upsertValidationResult(applicationCase, completenessValidationAgent.validate(applicationCase));
-        upsertValidationResult(applicationCase, universityRulesAgent.validate(applicationCase));
+        ValidationResult completeness = completenessValidationAgent.validate(applicationCase);
+        ValidationResult rules = universityRulesAgent.validate(applicationCase);
+        upsertValidationResult(applicationCase, completeness);
+        upsertValidationResult(applicationCase, rules);
+        auditLogService.recordValidationResults(applicationCase, completeness, rules);
     }
 
     private void upsertValidationResult(ApplicationCase applicationCase, ValidationResult validationResult) {
