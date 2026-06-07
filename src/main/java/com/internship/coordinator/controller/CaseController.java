@@ -6,17 +6,27 @@ import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
+import com.internship.coordinator.service.DocumentNotFoundException;
+import com.internship.coordinator.service.InvalidFileException;
+import com.internship.coordinator.service.StoredDocument;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/cases")
@@ -40,13 +50,40 @@ public class CaseController {
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
     }
 
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CaseDetailResponse> createCase(@RequestPart("file") MultipartFile file) {
+        CaseDetailResponse response = caseService.createCaseWithPdf(file);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @GetMapping("/{id}")
     public CaseDetailResponse getCase(@PathVariable UUID id) {
         return caseService.getCase(id);
     }
 
+    @GetMapping("/{id}/documents/{docId}")
+    public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
+        StoredDocument storedDocument = caseService.getDocument(id, docId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + storedDocument.fileName() + "\"")
+                .body(storedDocument.resource());
+    }
+
     @ExceptionHandler(CaseNotFoundException.class)
     public ResponseEntity<Void> handleCaseNotFound(CaseNotFoundException exception) {
         return ResponseEntity.notFound().build();
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ResponseEntity<Void> handleDocumentNotFound(DocumentNotFoundException exception) {
+        return ResponseEntity.notFound().build();
+    }
+
+    @ExceptionHandler(InvalidFileException.class)
+    public ResponseEntity<Void> handleInvalidFile(InvalidFileException exception) {
+        return ResponseEntity.badRequest().build();
     }
 }
