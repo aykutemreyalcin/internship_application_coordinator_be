@@ -102,7 +102,10 @@ class CaseDecisionControllerTest {
                         .content("""
                                 {"decision":"APPROVE"}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.error", is("Bad Request")))
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
@@ -126,7 +129,9 @@ class CaseDecisionControllerTest {
                         .content("""
                                 {"decision":"APPROVE"}
                                 """))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test

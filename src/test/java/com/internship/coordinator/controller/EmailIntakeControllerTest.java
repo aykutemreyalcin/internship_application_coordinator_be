@@ -35,7 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         properties = {
             "app.email-intake.enabled=true",
             "app.email-intake.imap.username=test@gmail.com",
-            "app.email-intake.imap.password=test-app-password"
+            "app.email-intake.imap.password=test-app-password",
+            "spring.task.scheduling.enabled=false"
         })
 class EmailIntakeControllerTest {
 
@@ -84,7 +85,9 @@ class EmailIntakeControllerTest {
 
         verify(mailboxClient).markAsProcessed(101L);
 
-        var cases = applicationCaseRepository.findAll();
+        var cases = applicationCaseRepository.findAll().stream()
+                .filter(applicationCase -> applicationCase.getDatasetKey() == null)
+                .toList();
         org.junit.jupiter.api.Assertions.assertEquals(1, cases.size());
         org.junit.jupiter.api.Assertions.assertEquals("Jan Kowalski", cases.getFirst().getStudentName());
         org.junit.jupiter.api.Assertions.assertEquals(1, cases.getFirst().getDocuments().size());

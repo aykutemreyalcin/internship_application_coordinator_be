@@ -93,6 +93,32 @@ class UniversityRulesAgentTest {
     }
 
     @Test
+    void validateFailsWhenStartDateBeforeEarliestAllowed() {
+        ApplicationCase applicationCase = compliantCase();
+        applicationCase.setInternshipStartDate(LocalDate.of(2025, 6, 1));
+        applicationCase.setInternshipEndDate(LocalDate.of(2025, 10, 1));
+
+        var result = agent.validate(applicationCase);
+
+        assertFalse(result.isPassed());
+        assertEquals("internshipStartDate", result.getIssues().getFirst().getField());
+        assertTrue(result.getIssues().getFirst().getMessage().contains("2026-01-01"));
+    }
+
+    @Test
+    void validateFailsWhenEndDateAfterLatestAllowed() {
+        ApplicationCase applicationCase = compliantCase();
+        applicationCase.setInternshipStartDate(LocalDate.of(2027, 6, 1));
+        applicationCase.setInternshipEndDate(LocalDate.of(2028, 1, 15));
+
+        var result = agent.validate(applicationCase);
+
+        assertFalse(result.isPassed());
+        assertEquals("internshipEndDate", result.getIssues().getFirst().getField());
+        assertTrue(result.getIssues().getFirst().getMessage().contains("2027-12-31"));
+    }
+
+    @Test
     void validateSkipsDateRulesWhenDatesMissing() {
         ApplicationCase applicationCase = ApplicationCase.builder()
                 .studentId("123456")

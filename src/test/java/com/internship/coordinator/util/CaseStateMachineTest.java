@@ -5,6 +5,7 @@ import com.internship.coordinator.model.Recommendation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,5 +71,30 @@ class CaseStateMachineTest {
         assertThrows(
                 IllegalStateException.class,
                 () -> stateMachine.resolveCoordinatorDecision(CaseStatus.NEW, Recommendation.APPROVE));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "READY_FOR_REVIEW, APPROVE, APPROVED",
+        "READY_FOR_REVIEW, REJECT, REJECTED",
+        "READY_FOR_REVIEW, CLARIFY, NEEDS_CLARIFICATION",
+        "PENDING_SUPERVISOR, APPROVE, APPROVED",
+        "PENDING_SUPERVISOR, REJECT, REJECTED",
+        "PENDING_SUPERVISOR, CLARIFY, NEEDS_CLARIFICATION",
+        "CLARIFICATION_REQUESTED, APPROVE, APPROVED",
+        "CLARIFICATION_REQUESTED, REJECT, REJECTED",
+        "CLARIFICATION_REQUESTED, CLARIFY, NEEDS_CLARIFICATION"
+    })
+    void resolveCoordinatorDecisionForAllowedStatuses(
+            CaseStatus currentStatus, Recommendation decision, CaseStatus expectedStatus) {
+        assertEquals(expectedStatus, stateMachine.resolveCoordinatorDecision(currentStatus, decision));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CaseStatus.class, names = {"APPROVED", "REJECTED"})
+    void rejectsDecisionFromTerminalStatuses(CaseStatus terminalStatus) {
+        assertThrows(
+                IllegalStateException.class,
+                () -> stateMachine.resolveCoordinatorDecision(terminalStatus, Recommendation.APPROVE));
     }
 }
