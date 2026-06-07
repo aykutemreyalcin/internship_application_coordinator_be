@@ -10,6 +10,7 @@ import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.agent.CompletenessValidationAgent;
 import com.internship.coordinator.agent.DocumentExtractionAgent;
+import com.internship.coordinator.agent.UniversityRulesAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
 import com.internship.coordinator.model.CaseStatus;
@@ -49,6 +50,7 @@ public class CaseService {
     private final PdfFileValidator pdfFileValidator;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
     private final CompletenessValidationAgent completenessValidationAgent;
+    private final UniversityRulesAgent universityRulesAgent;
     private final PdfPageCounter pdfPageCounter;
 
     public PageResponse<CaseSummaryResponse> listCases(CaseStatus status, String search, Pageable pageable) {
@@ -107,6 +109,22 @@ public class CaseService {
         return new StoredDocument(document.getFileName(), documentStorageService.loadAsResource(document.getStoragePath()));
     }
 
+    public ValidationSummaryDto getValidation(UUID caseId) {
+        return validateAndPersist(caseId);
+    }
+
+    @Transactional
+    public ValidationSummaryDto validateAndPersist(UUID caseId) {
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        runValidations(applicationCase);
+        applicationCaseRepository.save(applicationCase);
+
+        return toValidationSummary(applicationCase.getValidationResults());
+    }
+
     @Transactional
     public CaseDetailResponse extractCase(UUID caseId) {
         DocumentExtractionAgent documentExtractionAgent = documentExtractionAgentProvider.getIfAvailable();
@@ -137,11 +155,16 @@ public class CaseService {
 
         applyExtractedData(applicationCase, extractedData);
         document.setPageCount(pdfPageCounter.countPages(pdfBytes));
-        upsertValidationResult(applicationCase, completenessValidationAgent.validate(applicationCase));
+        runValidations(applicationCase);
         applicationCase.setStatus(CaseStatus.NEW);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
+    }
+
+    private void runValidations(ApplicationCase applicationCase) {
+        upsertValidationResult(applicationCase, completenessValidationAgent.validate(applicationCase));
+        upsertValidationResult(applicationCase, universityRulesAgent.validate(applicationCase));
     }
 
     private void upsertValidationResult(ApplicationCase applicationCase, ValidationResult validationResult) {

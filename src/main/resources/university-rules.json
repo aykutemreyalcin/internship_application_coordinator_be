@@ -1,0 +1,13 @@
+{
+  "internship": {
+    "minDurationDays": 84,
+    "maxDurationDays": 180,
+    "earliestStartDate": "2026-01-01",
+    "latestEndDate": "2027-12-31"
+  },
+  "fields": {
+    "studentIdPattern": "^\\d{5,8}$",
+    "supervisorEmailPattern": "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+    "requireSupervisorEmailFormat": true
+  }
+}

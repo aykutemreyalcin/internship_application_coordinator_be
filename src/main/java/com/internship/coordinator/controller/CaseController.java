@@ -3,6 +3,7 @@ package com.internship.coordinator.controller;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.PageResponse;
+import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
@@ -67,6 +68,11 @@ public class CaseController {
     @PostMapping("/{id}/extract")
     public CaseDetailResponse extractCase(@PathVariable UUID id) {
         return caseService.extractCase(id);
+    }
+
+    @GetMapping("/{id}/validation")
+    public ValidationSummaryDto getValidation(@PathVariable UUID id) {
+        return caseService.getValidation(id);
     }
 
     @GetMapping("/{id}/documents/{docId}")
