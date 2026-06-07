@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: internship-coordinator-db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-internship_coordinator}
+      POSTGRES_USER: ${POSTGRES_USER:-coordinator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coordinator}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-coordinator} -d ${POSTGRES_DB:-internship_coordinator}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
