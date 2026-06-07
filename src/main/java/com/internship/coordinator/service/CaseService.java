@@ -8,6 +8,7 @@ import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
+import com.internship.coordinator.agent.CompletenessValidationAgent;
 import com.internship.coordinator.agent.DocumentExtractionAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
@@ -47,6 +48,7 @@ public class CaseService {
     private final DocumentStorageService documentStorageService;
     private final PdfFileValidator pdfFileValidator;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
+    private final CompletenessValidationAgent completenessValidationAgent;
     private final PdfPageCounter pdfPageCounter;
 
     public PageResponse<CaseSummaryResponse> listCases(CaseStatus status, String search, Pageable pageable) {
@@ -135,10 +137,16 @@ public class CaseService {
 
         applyExtractedData(applicationCase, extractedData);
         document.setPageCount(pdfPageCounter.countPages(pdfBytes));
+        upsertValidationResult(applicationCase, completenessValidationAgent.validate(applicationCase));
         applicationCase.setStatus(CaseStatus.NEW);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
+    }
+
+    private void upsertValidationResult(ApplicationCase applicationCase, ValidationResult validationResult) {
+        applicationCase.getValidationResults().removeIf(result -> result.getType() == validationResult.getType());
+        applicationCase.addValidationResult(validationResult);
     }
 
     private void applyExtractedData(ApplicationCase applicationCase, ExtractedApplicationData extractedData) {
