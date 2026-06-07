@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
             "app.vertex-ai.enabled=true",
             "app.vertex-ai.project-id=test-project",
             "app.vertex-ai.region=europe-west1",
-            "app.vertex-ai.model-name=gemini-2.0-flash-001"
+            "app.vertex-ai.model-name=gemini-2.5-flash"
         })
 class GeminiPingControllerTest {
 
@@ -34,12 +34,12 @@ class GeminiPingControllerTest {
     @Test
     void pingEndpointReturnsGeminiResponse() throws Exception {
         when(geminiService.ping())
-                .thenReturn(new GeminiPingResponse("Reply with exactly one word: pong", "pong", "gemini-2.0-flash-001"));
+                .thenReturn(new GeminiPingResponse("Reply with exactly one word: pong", "pong", "gemini-2.5-flash"));
 
         mockMvc.perform(get("/api/internal/gemini/ping"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.prompt", org.hamcrest.Matchers.is("Reply with exactly one word: pong")))
                 .andExpect(jsonPath("$.response", org.hamcrest.Matchers.is("pong")))
-                .andExpect(jsonPath("$.modelName", org.hamcrest.Matchers.is("gemini-2.0-flash-001")));
+                .andExpect(jsonPath("$.modelName", org.hamcrest.Matchers.is("gemini-2.5-flash")));
     }
 }

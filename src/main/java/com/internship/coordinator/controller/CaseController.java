@@ -6,7 +6,10 @@ import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
+import com.internship.coordinator.service.CaseExtractionException;
 import com.internship.coordinator.service.DocumentNotFoundException;
+import com.internship.coordinator.service.ExtractionParseException;
+import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.InvalidFileException;
 import com.internship.coordinator.service.StoredDocument;
 import java.util.UUID;
@@ -61,6 +64,11 @@ public class CaseController {
         return caseService.getCase(id);
     }
 
+    @PostMapping("/{id}/extract")
+    public CaseDetailResponse extractCase(@PathVariable UUID id) {
+        return caseService.extractCase(id);
+    }
+
     @GetMapping("/{id}/documents/{docId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
         StoredDocument storedDocument = caseService.getDocument(id, docId);
@@ -85,5 +93,15 @@ public class CaseController {
     @ExceptionHandler(InvalidFileException.class)
     public ResponseEntity<Void> handleInvalidFile(InvalidFileException exception) {
         return ResponseEntity.badRequest().build();
+    }
+
+    @ExceptionHandler(CaseExtractionException.class)
+    public ResponseEntity<Void> handleCaseExtraction(CaseExtractionException exception) {
+        return ResponseEntity.badRequest().build();
+    }
+
+    @ExceptionHandler({ExtractionParseException.class, GeminiException.class})
+    public ResponseEntity<Void> handleExtractionFailure(RuntimeException exception) {
+        return ResponseEntity.internalServerError().build();
     }
 }
