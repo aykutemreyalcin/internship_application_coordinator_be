@@ -1,0 +1,12 @@
+# Local development profile. PostgreSQL datasource is added in BE-02.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+
+logging:
+  level:
+    com.internship.coordinator: DEBUG
+    org.springframework.web: INFO
