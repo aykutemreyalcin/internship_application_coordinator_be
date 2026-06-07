@@ -9,6 +9,7 @@ import com.internship.coordinator.service.CaseRecommendationException;
 import com.internship.coordinator.service.CaseSupervisorVerificationException;
 import com.internship.coordinator.service.ClarificationParseException;
 import com.internship.coordinator.service.DocumentNotFoundException;
+import com.internship.coordinator.service.EmailIntakeException;
 import com.internship.coordinator.service.ExtractionParseException;
 import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.InvalidFileException;
@@ -53,7 +54,8 @@ public class GlobalExceptionHandler {
         RecommendationParseException.class,
         ClarificationParseException.class,
         SupervisorVerificationParseException.class,
-        GeminiException.class
+        GeminiException.class,
+        EmailIntakeException.class
     })
     public ResponseEntity<ApiErrorResponse> handleInternalServerError(
             RuntimeException exception, HttpServletRequest request) {
