@@ -12,3 +12,8 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+
+app:
+  storage:
+    upload-dir: ${java.io.tmpdir}/iac-test-uploads
+    max-file-size-bytes: 10485760
