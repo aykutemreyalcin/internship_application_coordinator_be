@@ -56,7 +56,7 @@ class CaseExtractionControllerTest {
                         "Anna Nowak",
                         "supervisor@example.com",
                         "2026-06-01",
-                        "2026-11-30"));
+                        "2026-10-28"));
 
         mockMvc.perform(post("/api/cases/{id}/extract", caseId))
                 .andExpect(status().isOk())
@@ -68,9 +68,11 @@ class CaseExtractionControllerTest {
                 .andExpect(jsonPath("$.supervisorName").value("Anna Nowak"))
                 .andExpect(jsonPath("$.supervisorEmail").value("supervisor@example.com"))
                 .andExpect(jsonPath("$.internshipStartDate").value("2026-06-01"))
-                .andExpect(jsonPath("$.internshipEndDate").value("2026-11-30"))
+                .andExpect(jsonPath("$.internshipEndDate").value("2026-10-28"))
                 .andExpect(jsonPath("$.validation.completeness.passed").value(true))
                 .andExpect(jsonPath("$.validation.completeness.issues", hasSize(0)))
+                .andExpect(jsonPath("$.validation.rules.passed").value(true))
+                .andExpect(jsonPath("$.validation.rules.issues", hasSize(0)))
                 .andExpect(jsonPath("$.documents[0].pageCount").value(1));
     }
 }

@@ -24,3 +24,5 @@ app:
     project-id: ${GCP_PROJECT_ID:}
     region: ${GCP_REGION:europe-west1}
     model-name: ${GCP_GEMINI_MODEL:gemini-2.5-flash}
+  university-rules:
+    config-path: ${UNIVERSITY_RULES_CONFIG_PATH:classpath:university-rules.json}
