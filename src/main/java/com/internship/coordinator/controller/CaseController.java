@@ -1,5 +1,6 @@
 package com.internship.coordinator.controller;
 
+import com.internship.coordinator.dto.AuditLogEntryDto;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.ClarificationDraftResponse;
@@ -23,6 +24,7 @@ import com.internship.coordinator.service.ClarificationParseException;
 import com.internship.coordinator.service.RecommendationParseException;
 import com.internship.coordinator.service.SupervisorVerificationParseException;
 import com.internship.coordinator.service.StoredDocument;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -85,6 +87,11 @@ public class CaseController {
     @GetMapping("/{id}/validation")
     public ValidationSummaryDto getValidation(@PathVariable UUID id) {
         return caseService.getValidation(id);
+    }
+
+    @GetMapping("/{id}/audit")
+    public List<AuditLogEntryDto> getAuditLog(@PathVariable UUID id) {
+        return caseService.getAuditLog(id);
     }
 
     @PostMapping("/{id}/recommendation")

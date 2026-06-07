@@ -58,11 +58,15 @@ class CaseDecisionControllerTest {
                 .andExpect(jsonPath("$.status", is("APPROVED")));
 
         var auditEntries = auditLogEntryRepository.findByApplicationCaseCaseIdOrderByTimestampAsc(caseId);
-        org.junit.jupiter.api.Assertions.assertEquals(1, auditEntries.size());
-        org.junit.jupiter.api.Assertions.assertEquals("COORDINATOR", auditEntries.getFirst().getActor());
-        org.junit.jupiter.api.Assertions.assertEquals("DECISION_APPROVE", auditEntries.getFirst().getAction());
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditEntries.size());
+        org.junit.jupiter.api.Assertions.assertEquals("COORDINATOR", auditEntries.get(0).getActor());
+        org.junit.jupiter.api.Assertions.assertEquals("DECISION_APPROVE", auditEntries.get(0).getAction());
         org.junit.jupiter.api.Assertions.assertEquals(
-                "APPROVE: Verified with department.", auditEntries.getFirst().getDetail());
+                "APPROVE: Verified with department.", auditEntries.get(0).getDetail());
+        org.junit.jupiter.api.Assertions.assertEquals("COORDINATOR", auditEntries.get(1).getActor());
+        org.junit.jupiter.api.Assertions.assertEquals("STATUS_APPROVED", auditEntries.get(1).getAction());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "READY_FOR_REVIEW -> APPROVED", auditEntries.get(1).getDetail());
     }
 
     @Test
