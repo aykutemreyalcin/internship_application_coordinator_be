@@ -22,3 +22,5 @@ app:
     project-id: test-project
     region: europe-west1
     model-name: gemini-2.5-flash
+  cors:
+    allowed-origins: http://localhost:5173
