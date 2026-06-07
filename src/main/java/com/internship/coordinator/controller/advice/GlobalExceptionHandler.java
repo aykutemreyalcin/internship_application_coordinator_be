@@ -15,6 +15,7 @@ import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.InvalidFileException;
 import com.internship.coordinator.service.RecommendationParseException;
 import com.internship.coordinator.service.SupervisorVerificationParseException;
+import com.internship.coordinator.testdataset.TestDatasetSeedException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
@@ -55,7 +56,8 @@ public class GlobalExceptionHandler {
         ClarificationParseException.class,
         SupervisorVerificationParseException.class,
         GeminiException.class,
-        EmailIntakeException.class
+        EmailIntakeException.class,
+        TestDatasetSeedException.class
     })
     public ResponseEntity<ApiErrorResponse> handleInternalServerError(
             RuntimeException exception, HttpServletRequest request) {

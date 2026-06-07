@@ -67,6 +67,9 @@ public class ApplicationCase {
     @Column(columnDefinition = "TEXT")
     private String recommendationReason;
 
+    @Column(name = "dataset_key", unique = true)
+    private String datasetKey;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

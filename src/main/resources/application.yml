@@ -38,3 +38,5 @@ app:
       username: ${GMAIL_IMAP_USERNAME:}
       password: ${GMAIL_IMAP_PASSWORD:}
       folder: ${GMAIL_IMAP_FOLDER:INBOX}
+  test-dataset:
+    enabled: ${TEST_DATASET_ENABLED:false}

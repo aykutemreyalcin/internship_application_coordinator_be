@@ -34,3 +34,5 @@ app:
       username: test@gmail.com
       password: test-app-password
       folder: INBOX
+  test-dataset:
+    enabled: false
