@@ -4,6 +4,7 @@ import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
 import com.internship.coordinator.dto.ClarificationDraftResponse;
 import com.internship.coordinator.dto.PageResponse;
+import com.internship.coordinator.dto.SupervisorVerificationDraftResponse;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
@@ -15,8 +16,10 @@ import com.internship.coordinator.service.DocumentNotFoundException;
 import com.internship.coordinator.service.ExtractionParseException;
 import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.InvalidFileException;
+import com.internship.coordinator.service.CaseSupervisorVerificationException;
 import com.internship.coordinator.service.ClarificationParseException;
 import com.internship.coordinator.service.RecommendationParseException;
+import com.internship.coordinator.service.SupervisorVerificationParseException;
 import com.internship.coordinator.service.StoredDocument;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +93,11 @@ public class CaseController {
         return caseService.generateClarification(id);
     }
 
+    @PostMapping("/{id}/supervisor-verification")
+    public SupervisorVerificationDraftResponse generateSupervisorVerification(@PathVariable UUID id) {
+        return caseService.generateSupervisorVerification(id);
+    }
+
     @GetMapping("/{id}/documents/{docId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
         StoredDocument storedDocument = caseService.getDocument(id, docId);
@@ -131,10 +139,16 @@ public class CaseController {
         return ResponseEntity.badRequest().build();
     }
 
+    @ExceptionHandler(CaseSupervisorVerificationException.class)
+    public ResponseEntity<Void> handleCaseSupervisorVerification(CaseSupervisorVerificationException exception) {
+        return ResponseEntity.badRequest().build();
+    }
+
     @ExceptionHandler({
         ExtractionParseException.class,
         RecommendationParseException.class,
         ClarificationParseException.class,
+        SupervisorVerificationParseException.class,
         GeminiException.class
     })
     public ResponseEntity<Void> handleAgentFailure(RuntimeException exception) {

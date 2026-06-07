@@ -6,6 +6,7 @@ import com.internship.coordinator.dto.ClarificationDraftResponse;
 import com.internship.coordinator.dto.DocumentSummaryDto;
 import com.internship.coordinator.dto.ExtractedApplicationData;
 import com.internship.coordinator.dto.PageResponse;
+import com.internship.coordinator.dto.SupervisorVerificationDraftResponse;
 import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
@@ -13,6 +14,7 @@ import com.internship.coordinator.agent.ClarificationRequestAgent;
 import com.internship.coordinator.agent.CompletenessValidationAgent;
 import com.internship.coordinator.agent.DecisionRecommendationAgent;
 import com.internship.coordinator.agent.DocumentExtractionAgent;
+import com.internship.coordinator.agent.SupervisorVerificationAgent;
 import com.internship.coordinator.agent.UniversityRulesAgent;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ApplicationDocument;
@@ -37,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -56,6 +59,11 @@ public class CaseService {
             CaseStatus.READY_FOR_REVIEW,
             CaseStatus.CLARIFICATION_REQUESTED);
 
+    private static final Set<CaseStatus> SUPERVISOR_VERIFICATION_STATUSES = EnumSet.of(
+            CaseStatus.READY_FOR_REVIEW,
+            CaseStatus.PENDING_SUPERVISOR,
+            CaseStatus.CLARIFICATION_REQUESTED);
+
     private final ApplicationCaseRepository applicationCaseRepository;
     private final ApplicationDocumentRepository applicationDocumentRepository;
     private final DocumentStorageService documentStorageService;
@@ -63,6 +71,7 @@ public class CaseService {
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
     private final ObjectProvider<DecisionRecommendationAgent> decisionRecommendationAgentProvider;
     private final ObjectProvider<ClarificationRequestAgent> clarificationRequestAgentProvider;
+    private final ObjectProvider<SupervisorVerificationAgent> supervisorVerificationAgentProvider;
     private final CompletenessValidationAgent completenessValidationAgent;
     private final UniversityRulesAgent universityRulesAgent;
     private final PdfPageCounter pdfPageCounter;
@@ -201,6 +210,45 @@ public class CaseService {
                 applicationCase.getCaseId(),
                 applicationCase.getStatus(),
                 applicationCase.getStudentName(),
+                draft.subject(),
+                draft.body());
+    }
+
+    @Transactional
+    public SupervisorVerificationDraftResponse generateSupervisorVerification(UUID caseId) {
+        SupervisorVerificationAgent supervisorVerificationAgent =
+                supervisorVerificationAgentProvider.getIfAvailable();
+        if (supervisorVerificationAgent == null) {
+            throw new CaseSupervisorVerificationException(
+                    "Supervisor verification is disabled. Enable Vertex AI to generate verification drafts.");
+        }
+
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        if (!SUPERVISOR_VERIFICATION_STATUSES.contains(applicationCase.getStatus())) {
+            throw new CaseSupervisorVerificationException(
+                    "Case status does not allow supervisor verification: " + applicationCase.getStatus());
+        }
+        if (!StringUtils.hasText(applicationCase.getSupervisorEmail())) {
+            throw new CaseSupervisorVerificationException("Supervisor email is required for verification");
+        }
+        if (!StringUtils.hasText(applicationCase.getSupervisorName())) {
+            throw new CaseSupervisorVerificationException("Supervisor name is required for verification");
+        }
+
+        runValidations(applicationCase);
+        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+        var draft = supervisorVerificationAgent.generateDraft(applicationCase, validation);
+        applicationCase.setStatus(CaseStatus.PENDING_SUPERVISOR);
+        applicationCaseRepository.save(applicationCase);
+
+        return new SupervisorVerificationDraftResponse(
+                applicationCase.getCaseId(),
+                applicationCase.getStatus(),
+                applicationCase.getSupervisorName(),
+                applicationCase.getSupervisorEmail(),
                 draft.subject(),
                 draft.body());
     }
