@@ -2,17 +2,20 @@ package com.internship.coordinator.controller;
 
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
+import com.internship.coordinator.dto.ClarificationDraftResponse;
 import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
 import com.internship.coordinator.service.CaseNotFoundException;
 import com.internship.coordinator.service.CaseService;
 import com.internship.coordinator.service.CaseExtractionException;
+import com.internship.coordinator.service.CaseClarificationException;
 import com.internship.coordinator.service.CaseRecommendationException;
 import com.internship.coordinator.service.DocumentNotFoundException;
 import com.internship.coordinator.service.ExtractionParseException;
 import com.internship.coordinator.service.GeminiException;
 import com.internship.coordinator.service.InvalidFileException;
+import com.internship.coordinator.service.ClarificationParseException;
 import com.internship.coordinator.service.RecommendationParseException;
 import com.internship.coordinator.service.StoredDocument;
 import java.util.UUID;
@@ -82,6 +85,11 @@ public class CaseController {
         return caseService.generateRecommendation(id);
     }
 
+    @PostMapping("/{id}/clarification")
+    public ClarificationDraftResponse generateClarification(@PathVariable UUID id) {
+        return caseService.generateClarification(id);
+    }
+
     @GetMapping("/{id}/documents/{docId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
         StoredDocument storedDocument = caseService.getDocument(id, docId);
@@ -118,7 +126,17 @@ public class CaseController {
         return ResponseEntity.badRequest().build();
     }
 
-    @ExceptionHandler({ExtractionParseException.class, RecommendationParseException.class, GeminiException.class})
+    @ExceptionHandler(CaseClarificationException.class)
+    public ResponseEntity<Void> handleCaseClarification(CaseClarificationException exception) {
+        return ResponseEntity.badRequest().build();
+    }
+
+    @ExceptionHandler({
+        ExtractionParseException.class,
+        RecommendationParseException.class,
+        ClarificationParseException.class,
+        GeminiException.class
+    })
     public ResponseEntity<Void> handleAgentFailure(RuntimeException exception) {
         return ResponseEntity.internalServerError().build();
     }

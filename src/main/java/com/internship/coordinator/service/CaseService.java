@@ -2,12 +2,14 @@ package com.internship.coordinator.service;
 
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.dto.CaseSummaryResponse;
+import com.internship.coordinator.dto.ClarificationDraftResponse;
 import com.internship.coordinator.dto.DocumentSummaryDto;
 import com.internship.coordinator.dto.ExtractedApplicationData;
 import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
+import com.internship.coordinator.agent.ClarificationRequestAgent;
 import com.internship.coordinator.agent.CompletenessValidationAgent;
 import com.internship.coordinator.agent.DecisionRecommendationAgent;
 import com.internship.coordinator.agent.DocumentExtractionAgent;
@@ -48,12 +50,19 @@ public class CaseService {
     private static final Set<CaseStatus> RECOMMENDABLE_STATUSES = EnumSet.of(
             CaseStatus.NEW, CaseStatus.NEEDS_CLARIFICATION, CaseStatus.CLARIFICATION_REQUESTED);
 
+    private static final Set<CaseStatus> CLARIFICATION_STATUSES = EnumSet.of(
+            CaseStatus.NEW,
+            CaseStatus.NEEDS_CLARIFICATION,
+            CaseStatus.READY_FOR_REVIEW,
+            CaseStatus.CLARIFICATION_REQUESTED);
+
     private final ApplicationCaseRepository applicationCaseRepository;
     private final ApplicationDocumentRepository applicationDocumentRepository;
     private final DocumentStorageService documentStorageService;
     private final PdfFileValidator pdfFileValidator;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
     private final ObjectProvider<DecisionRecommendationAgent> decisionRecommendationAgentProvider;
+    private final ObjectProvider<ClarificationRequestAgent> clarificationRequestAgentProvider;
     private final CompletenessValidationAgent completenessValidationAgent;
     private final UniversityRulesAgent universityRulesAgent;
     private final PdfPageCounter pdfPageCounter;
@@ -158,6 +167,42 @@ public class CaseService {
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);
+    }
+
+    @Transactional
+    public ClarificationDraftResponse generateClarification(UUID caseId) {
+        ClarificationRequestAgent clarificationRequestAgent = clarificationRequestAgentProvider.getIfAvailable();
+        if (clarificationRequestAgent == null) {
+            throw new CaseClarificationException(
+                    "Clarification generation is disabled. Enable Vertex AI to generate clarification drafts.");
+        }
+
+        ApplicationCase applicationCase = applicationCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        if (!CLARIFICATION_STATUSES.contains(applicationCase.getStatus())) {
+            throw new CaseClarificationException(
+                    "Case status does not allow clarification: " + applicationCase.getStatus());
+        }
+
+        runValidations(applicationCase);
+        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+        List<String> topics = clarificationRequestAgent.collectTopics(applicationCase, validation);
+        if (topics.isEmpty()) {
+            throw new CaseClarificationException("No missing or ambiguous fields require clarification");
+        }
+
+        var draft = clarificationRequestAgent.generateDraft(applicationCase, validation, topics);
+        applicationCase.setStatus(CaseStatus.CLARIFICATION_REQUESTED);
+        applicationCaseRepository.save(applicationCase);
+
+        return new ClarificationDraftResponse(
+                applicationCase.getCaseId(),
+                applicationCase.getStatus(),
+                applicationCase.getStudentName(),
+                draft.subject(),
+                draft.body());
     }
 
     @Transactional
