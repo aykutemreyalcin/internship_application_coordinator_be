@@ -26,3 +26,13 @@ app:
     model-name: ${GCP_GEMINI_MODEL:gemini-2.5-flash}
   university-rules:
     config-path: ${UNIVERSITY_RULES_CONFIG_PATH:classpath:university-rules.json}
+  email-intake:
+    enabled: ${EMAIL_INTAKE_ENABLED:false}
+    mode: ${EMAIL_INTAKE_MODE:imap}
+    poll-interval-seconds: ${EMAIL_INTAKE_POLL_INTERVAL_SECONDS:60}
+    imap:
+      host: ${GMAIL_IMAP_HOST:imap.gmail.com}
+      port: ${GMAIL_IMAP_PORT:993}
+      username: ${GMAIL_IMAP_USERNAME:}
+      password: ${GMAIL_IMAP_PASSWORD:}
+      folder: ${GMAIL_IMAP_FOLDER:INBOX}

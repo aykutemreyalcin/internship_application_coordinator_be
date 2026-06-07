@@ -37,18 +37,37 @@ public class PdfFileValidator {
             throw new InvalidFileException("Only PDF files are allowed");
         }
 
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !originalFilename.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
-            throw new InvalidFileException("Only PDF files are allowed");
-        }
+        validatePdfFileName(file.getOriginalFilename());
 
         try {
-            byte[] header = file.getInputStream().readNBytes(5);
-            if (header.length < 4 || !new String(header, 0, 4).startsWith("%PDF")) {
-                throw new InvalidFileException("File is not a valid PDF");
-            }
+            validatePdfHeader(file.getInputStream().readNBytes(5));
         } catch (IOException exception) {
             throw new InvalidFileException("Unable to read uploaded PDF");
+        }
+    }
+
+    public void validateBytes(byte[] content, String fileName) {
+        if (content == null || content.length == 0) {
+            throw new InvalidFileException("PDF file is required");
+        }
+
+        if (content.length > maxFileSizeBytes) {
+            throw new InvalidFileException("PDF file exceeds maximum allowed size");
+        }
+
+        validatePdfFileName(fileName);
+        validatePdfHeader(content.length >= 4 ? content : new byte[0]);
+    }
+
+    private void validatePdfFileName(String fileName) {
+        if (fileName == null || !fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            throw new InvalidFileException("Only PDF files are allowed");
+        }
+    }
+
+    private void validatePdfHeader(byte[] header) {
+        if (header.length < 4 || !new String(header, 0, 4).startsWith("%PDF")) {
+            throw new InvalidFileException("File is not a valid PDF");
         }
     }
 

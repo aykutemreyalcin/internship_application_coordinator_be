@@ -112,9 +112,45 @@ public class CaseService {
     @Transactional
     public CaseDetailResponse createCaseWithPdf(MultipartFile file) {
         pdfFileValidator.validate(file);
-
         String fileName = pdfFileValidator.sanitizeFileName(file.getOriginalFilename());
+        return createCaseFromStoredPdf(fileName, file, "SYSTEM", "CASE_CREATED", "Uploaded " + fileName);
+    }
 
+    @Transactional
+    public CaseDetailResponse createCaseFromEmail(
+            String fileName,
+            byte[] pdfBytes,
+            String sender,
+            String subject,
+            String messageId) {
+        pdfFileValidator.validateBytes(pdfBytes, fileName);
+        String sanitizedFileName = pdfFileValidator.sanitizeFileName(fileName);
+        String auditDetail = "messageId="
+                + messageId
+                + ", from="
+                + sender
+                + ", subject="
+                + (subject == null ? "(no subject)" : subject)
+                + ", file="
+                + sanitizedFileName;
+        return createCaseFromStoredPdf(
+                sanitizedFileName, pdfBytes, "Email Intake Agent", "EMAIL_INTAKE", auditDetail);
+    }
+
+    @Transactional
+    public void tryGenerateRecommendation(UUID caseId) {
+        if (decisionRecommendationAgentProvider.getIfAvailable() == null) {
+            return;
+        }
+        try {
+            generateRecommendation(caseId);
+        } catch (CaseRecommendationException exception) {
+            // Pipeline continues even if recommendation cannot be generated yet.
+        }
+    }
+
+    private CaseDetailResponse createCaseFromStoredPdf(
+            String fileName, MultipartFile file, String auditActor, String auditAction, String auditDetail) {
         ApplicationCase applicationCase =
                 ApplicationCase.builder().status(CaseStatus.NEW).build();
         ApplicationDocument document = ApplicationDocument.builder()
@@ -132,7 +168,32 @@ public class CaseService {
         }
 
         document.setStoragePath(storagePath);
-        auditLogService.record(applicationCase, "SYSTEM", "CASE_CREATED", "Uploaded " + fileName);
+        auditLogService.record(applicationCase, auditActor, auditAction, auditDetail);
+        applicationCaseRepository.save(applicationCase);
+
+        return toDetail(applicationCase);
+    }
+
+    private CaseDetailResponse createCaseFromStoredPdf(
+            String fileName, byte[] pdfBytes, String auditActor, String auditAction, String auditDetail) {
+        ApplicationCase applicationCase =
+                ApplicationCase.builder().status(CaseStatus.NEW).build();
+        ApplicationDocument document = ApplicationDocument.builder()
+                .fileName(fileName)
+                .storagePath("pending")
+                .build();
+        applicationCase.addDocument(document);
+        applicationCaseRepository.save(applicationCase);
+
+        String storagePath = applicationCase.getCaseId() + "/" + document.getId() + ".pdf";
+        try {
+            documentStorageService.storeBytes(storagePath, pdfBytes);
+        } catch (IOException exception) {
+            throw new DocumentStorageException("Failed to store email PDF attachment", exception);
+        }
+
+        document.setStoragePath(storagePath);
+        auditLogService.record(applicationCase, auditActor, auditAction, auditDetail);
         applicationCaseRepository.save(applicationCase);
 
         return toDetail(applicationCase);

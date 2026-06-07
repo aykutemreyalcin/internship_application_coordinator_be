@@ -27,6 +27,12 @@ public class DocumentStorageService {
         return relativePath;
     }
 
+    public void storeBytes(String relativePath, byte[] content) throws IOException {
+        Path target = resolve(relativePath);
+        Files.createDirectories(target.getParent());
+        Files.write(target, content);
+    }
+
     public Resource loadAsResource(String relativePath) {
         Path filePath = resolve(relativePath);
         if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
