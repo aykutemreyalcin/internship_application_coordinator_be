@@ -4,6 +4,7 @@ import com.internship.coordinator.config.EmailIntakeProperties;
 import com.internship.coordinator.dto.IncomingEmailAttachment;
 import com.internship.coordinator.dto.IncomingEmailMessage;
 import jakarta.mail.Address;
+import jakarta.mail.FetchProfile;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
@@ -15,16 +16,26 @@ import jakarta.mail.Store;
 import jakarta.mail.UIDFolder;
 import jakarta.mail.internet.MimeUtility;
 import jakarta.mail.search.FlagTerm;
+import jakarta.mail.search.SearchTerm;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.angus.mail.imap.IMAPFolder;
+import org.eclipse.angus.mail.imap.SortTerm;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 public class ImapMailboxClient implements MailboxClient {
+
+    private static final String DEFAULT_GMAIL_RAW_SEARCH_QUERY = "is:unread has:attachment filename:pdf";
+    private static final String BROAD_GMAIL_RAW_SEARCH_QUERY = "is:unread has:attachment newer_than:180d";
 
     private final EmailIntakeProperties.Imap imap;
 
@@ -66,10 +77,32 @@ public class ImapMailboxClient implements MailboxClient {
 
     private List<IncomingEmailMessage> readUnreadPdfMessages(Folder folder) throws MessagingException {
         UIDFolder uidFolder = toUidFolder(folder);
-        Message[] messages = folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
-        List<IncomingEmailMessage> results = new ArrayList<>();
+        Message[] candidates = findCandidateMessages(folder);
+        if (candidates.length == 0) {
+            log.debug("No candidate unread messages in IMAP folder {}", folder.getFullName());
+            return List.of();
+        }
 
-        for (Message message : messages) {
+        int scanLimit = Math.max(1, imap.maxUnreadMessagesPerPoll());
+        Message[] toScan = selectNewestMessages(candidates, scanLimit, folder);
+        if (candidates.length > toScan.length) {
+            log.info(
+                    "Scanning newest {} of {} candidate unread messages in {} (increase EMAIL_INTAKE_MAX_UNREAD_PER_POLL to scan more)",
+                    toScan.length,
+                    candidates.length,
+                    folder.getFullName());
+        } else {
+            log.debug("Scanning {} candidate unread messages in {}", toScan.length, folder.getFullName());
+        }
+
+        FetchProfile profile = new FetchProfile();
+        profile.add(FetchProfile.Item.ENVELOPE);
+        profile.add(FetchProfile.Item.CONTENT_INFO);
+        profile.add(UIDFolder.FetchProfileItem.UID);
+        folder.fetch(toScan, profile);
+
+        List<IncomingEmailMessage> results = new ArrayList<>();
+        for (Message message : toScan) {
             IncomingEmailAttachment pdfAttachment = findFirstPdfAttachment(message);
             if (pdfAttachment == null) {
                 continue;
@@ -83,10 +116,115 @@ public class ImapMailboxClient implements MailboxClient {
                     pdfAttachment));
         }
 
+        log.info("Found {} unread PDF message(s) in {}", results.size(), folder.getFullName());
         return results;
     }
 
+    private Message[] findCandidateMessages(Folder folder) throws MessagingException {
+        if (folder instanceof IMAPFolder imapFolder && GmailImapSupport.isGmailHost(imap.host())) {
+            String query = StringUtils.hasText(imap.gmailRawSearchQuery())
+                    ? imap.gmailRawSearchQuery()
+                    : DEFAULT_GMAIL_RAW_SEARCH_QUERY;
+            try {
+                Message[] gmailMatches = GmailImapSupport.searchRaw(imapFolder, query);
+                if (gmailMatches != null) {
+                    log.debug("Gmail RAW search '{}' matched {} message(s)", query, gmailMatches.length);
+                    if (gmailMatches.length == 0 && query.contains("filename:pdf")) {
+                        Message[] broaderMatches = GmailImapSupport.searchRaw(imapFolder, BROAD_GMAIL_RAW_SEARCH_QUERY);
+                        if (broaderMatches != null && broaderMatches.length > 0) {
+                            log.debug(
+                                    "Gmail RAW fallback '{}' matched {} message(s)",
+                                    BROAD_GMAIL_RAW_SEARCH_QUERY,
+                                    broaderMatches.length);
+                            return broaderMatches;
+                        }
+                    }
+                    return gmailMatches;
+                }
+            } catch (MessagingException exception) {
+                log.warn("Gmail RAW search failed, falling back to IMAP UNSEEN search", exception);
+            }
+        }
+
+        SearchTerm unread = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
+        if (folder instanceof IMAPFolder imapFolder) {
+            try {
+                return imapFolder.getSortedMessages(new SortTerm[] {SortTerm.REVERSE, SortTerm.ARRIVAL}, unread);
+            } catch (MessagingException exception) {
+                log.warn("IMAP SORT unavailable, scanning recent mailbox window for unread messages", exception);
+                return findRecentUnreadMessages(folder, Math.max(imap.maxUnreadMessagesPerPoll() * 10, 500));
+            }
+        }
+        return folder.search(unread);
+    }
+
+    private Message[] findRecentUnreadMessages(Folder folder, int windowSize) throws MessagingException {
+        int messageCount = folder.getMessageCount();
+        if (messageCount == 0) {
+            return new Message[0];
+        }
+
+        int window = Math.min(messageCount, Math.max(windowSize, 1));
+        int start = messageCount - window + 1;
+        Message[] recentMessages = folder.getMessages(start, messageCount);
+
+        FetchProfile profile = new FetchProfile();
+        profile.add(FetchProfile.Item.ENVELOPE);
+        profile.add(FetchProfile.Item.FLAGS);
+        folder.fetch(recentMessages, profile);
+
+        List<Message> unreadMessages = new ArrayList<>();
+        for (int index = recentMessages.length - 1; index >= 0; index--) {
+            Message message = recentMessages[index];
+            if (!message.isSet(Flags.Flag.SEEN)) {
+                unreadMessages.add(message);
+            }
+        }
+
+        log.debug(
+                "Found {} unread message(s) in the newest {} messages of {}",
+                unreadMessages.size(),
+                window,
+                folder.getFullName());
+        return unreadMessages.toArray(Message[]::new);
+    }
+
+    private Message[] selectNewestMessages(Message[] messages, int scanLimit, Folder folder) throws MessagingException {
+        if (messages.length <= scanLimit) {
+            return messages;
+        }
+
+        FetchProfile profile = new FetchProfile();
+        profile.add(FetchProfile.Item.ENVELOPE);
+        folder.fetch(messages, profile);
+        Message[] sorted = messages.clone();
+        Arrays.sort(sorted, Comparator.comparing(this::messageDateSafe, Comparator.nullsLast(Comparator.reverseOrder())));
+        return Arrays.copyOf(sorted, scanLimit);
+    }
+
+    private Date messageDateSafe(Message message) {
+        try {
+            Date received = message.getReceivedDate();
+            if (received != null) {
+                return received;
+            }
+            return message.getSentDate();
+        } catch (MessagingException exception) {
+            return null;
+        }
+    }
+
     private IncomingEmailAttachment findFirstPdfAttachment(Part part) throws MessagingException {
+        if (isPdfPart(part)) {
+            String fileName = resolvePdfFileName(part);
+            try {
+                byte[] content = readAllBytes(part.getInputStream());
+                return new IncomingEmailAttachment(fileName, content);
+            } catch (IOException exception) {
+                throw new EmailIntakeException("Failed to read PDF attachment: " + fileName, exception);
+            }
+        }
+
         if (part.isMimeType("multipart/*")) {
             Multipart multipart;
             try {
@@ -100,20 +238,32 @@ public class ImapMailboxClient implements MailboxClient {
                     return attachment;
                 }
             }
-            return null;
+        } else if (part.isMimeType("message/rfc822")) {
+            try {
+                return findFirstPdfAttachment((Part) part.getContent());
+            } catch (IOException exception) {
+                throw new EmailIntakeException("Failed to read forwarded email content", exception);
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isPdfPart(Part part) throws MessagingException {
+        if (part.isMimeType("application/pdf") || part.isMimeType("application/x-pdf")) {
+            return true;
         }
 
         String fileName = decodeFileName(part.getFileName());
-        if (fileName == null || !fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
-            return null;
-        }
+        return fileName != null && fileName.toLowerCase(Locale.ROOT).endsWith(".pdf");
+    }
 
-        try {
-            byte[] content = readAllBytes(part.getInputStream());
-            return new IncomingEmailAttachment(fileName, content);
-        } catch (IOException exception) {
-            throw new EmailIntakeException("Failed to read PDF attachment: " + fileName, exception);
+    private String resolvePdfFileName(Part part) throws MessagingException {
+        String fileName = decodeFileName(part.getFileName());
+        if (fileName != null && !fileName.isBlank()) {
+            return fileName;
         }
+        return "attachment.pdf";
     }
 
     private byte[] readAllBytes(InputStream inputStream) throws IOException {
@@ -155,6 +305,7 @@ public class ImapMailboxClient implements MailboxClient {
         try {
             Session session = Session.getInstance(createSessionProperties());
             store = session.getStore("imaps");
+            log.debug("Connecting to IMAP {}:{} folder={}", imap.host(), imap.port(), imap.folder());
             store.connect(imap.host(), imap.port(), imap.username(), imap.password());
             folder = store.getFolder(imap.folder());
             folder.open(mode);
@@ -171,6 +322,9 @@ public class ImapMailboxClient implements MailboxClient {
         properties.put("mail.imaps.host", imap.host());
         properties.put("mail.imaps.port", String.valueOf(imap.port()));
         properties.put("mail.imaps.ssl.enable", "true");
+        properties.put("mail.imaps.connectiontimeout", String.valueOf(imap.connectionTimeoutMs()));
+        properties.put("mail.imaps.timeout", String.valueOf(imap.readTimeoutMs()));
+        properties.put("mail.imaps.writetimeout", String.valueOf(imap.readTimeoutMs()));
         return properties;
     }
 

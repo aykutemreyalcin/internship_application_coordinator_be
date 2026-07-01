@@ -20,13 +20,15 @@ public class EmailIntakeScheduler {
     @Scheduled(fixedDelayString = "${app.email-intake.poll-interval-seconds:60}000")
     public void pollMailbox() {
         log.debug("Polling mailbox for internship application emails");
-        var result = emailIntakeAgent.pollMailbox();
-        if (result.processedCount() > 0 || result.skippedCount() > 0) {
+        try {
+            var result = emailIntakeAgent.pollMailbox();
             log.info(
                     "Email intake poll finished: processed={}, skipped={}, intervalSeconds={}",
                     result.processedCount(),
                     result.skippedCount(),
                     emailIntakeProperties.pollIntervalSeconds());
+        } catch (RuntimeException exception) {
+            log.error("Email intake poll failed", exception);
         }
     }
 }

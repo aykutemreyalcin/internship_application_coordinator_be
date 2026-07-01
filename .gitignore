@@ -35,6 +35,7 @@ build/
 ### Project ###
 .env
 .env.local
+.env.docker
 *.log
 .DS_Store
 uploads/
