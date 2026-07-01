@@ -9,6 +9,7 @@ import com.internship.coordinator.service.MailboxClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,8 +25,21 @@ public class EmailIntakeAgent {
     private final MailboxClient mailboxClient;
     private final CaseService caseService;
     private final ProcessedEmailMessageRepository processedEmailMessageRepository;
+    private final ReentrantLock pollLock = new ReentrantLock();
 
     public EmailIntakePollResponse pollMailbox() {
+        if (!pollLock.tryLock()) {
+            log.warn("Email intake poll already in progress, skipping overlapping request");
+            return new EmailIntakePollResponse(0, 0, List.of());
+        }
+        try {
+            return pollMailboxUnlocked();
+        } finally {
+            pollLock.unlock();
+        }
+    }
+
+    private EmailIntakePollResponse pollMailboxUnlocked() {
         List<IncomingEmailMessage> messages = mailboxClient.fetchUnreadPdfMessages();
         int processedCount = 0;
         int skippedCount = 0;
@@ -51,6 +65,7 @@ public class EmailIntakeAgent {
 
         return new EmailIntakePollResponse(processedCount, skippedCount, caseIds);
     }
+
 
     @Transactional
     UUID processMessage(IncomingEmailMessage message) {

@@ -34,5 +34,9 @@ app:
       username: test@gmail.com
       password: test-app-password
       folder: INBOX
+      connection-timeout-ms: 10000
+      read-timeout-ms: 30000
+      max-unread-messages-per-poll: 50
+      gmail-raw-search-query:
   test-dataset:
     enabled: false
