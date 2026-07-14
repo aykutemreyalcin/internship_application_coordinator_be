@@ -121,9 +121,19 @@ Live Vertex AI integration tests are **skipped** unless explicitly enabled:
 VERTEX_AI_LIVE_TEST=true ./mvnw test -Dtest=GeminiLiveIntegrationTest,DocumentExtractionLiveIntegrationTest
 ```
 
-Expected: **113 tests**, 0 failures, 2 skipped (live Gemini).
+Expected: **117 tests**, 0 failures, 2 skipped (live Gemini).
 
-## Common workflows
+## Observability (agent traces)
+
+LangSmith is aimed at LangChain/LangGraph stacks. This project uses **Spring Boot + Vertex AI**, so observability is built into the existing pipeline:
+
+| Signal | Where |
+|--------|--------|
+| Structured agent step logs | `agent.step.start` / `agent.step.success` / `agent.step.failed` (`caseId`, `step`, `durationMs`) |
+| Gemini call metrics | `gemini.call.*` logs — operation, model, latency, token counts |
+| Case timeline | Audit log (`GET /api/cases/{id}/audit`) — Gemini latency/tokens appended to step `detail` |
+
+Local logs: `logging.level.com.internship.coordinator=DEBUG` in the `local` profile.
 
 ### Upload and process a case manually
 
