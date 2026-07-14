@@ -7,6 +7,7 @@ import com.internship.coordinator.dto.IncomingEmailAttachment;
 import com.internship.coordinator.dto.IncomingEmailMessage;
 import com.internship.coordinator.repository.ApplicationCaseRepository;
 import com.internship.coordinator.repository.ProcessedEmailMessageRepository;
+import com.internship.coordinator.service.EmailIntakeScheduler;
 import com.internship.coordinator.service.MailboxClient;
 import com.internship.coordinator.support.SampleApplicationPdf;
 import java.util.List;
@@ -54,6 +55,10 @@ class EmailIntakeControllerTest {
 
     @MockitoBean
     private DocumentExtractionAgent documentExtractionAgent;
+
+    /** Prevents background poll from racing the manual poll endpoint under test. */
+    @MockitoBean
+    private EmailIntakeScheduler emailIntakeScheduler;
 
     @Test
     void pollEndpointProcessesEmailedPdfIntoCaseAndExtractsFields() throws Exception {

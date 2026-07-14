@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -245,23 +247,45 @@ public class CaseService {
                     "Case status does not allow recommendation: " + applicationCase.getStatus());
         }
 
-        runValidations(applicationCase);
-        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
-        var generatedRecommendation = decisionRecommendationAgent.recommend(applicationCase, validation);
+        long startedNanos = System.nanoTime();
+        log.info("agent.step.start caseId={} step=recommendation", caseId);
+        GeminiCallContext.clear();
+        try {
+            runValidations(applicationCase);
+            ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+            var generatedRecommendation = decisionRecommendationAgent.recommend(applicationCase, validation);
+            GeminiCallMetrics geminiMetrics = GeminiCallContext.consume();
 
-        CaseStatus previousStatus = applicationCase.getStatus();
-        applicationCase.setRecommendation(generatedRecommendation.recommendation());
-        applicationCase.setRecommendationReason(generatedRecommendation.reason());
-        auditLogService.record(
-                applicationCase,
-                "Decision Recommendation Agent",
-                "RECOMMENDATION",
-                generatedRecommendation.recommendation().name() + ": " + generatedRecommendation.reason());
-        auditLogService.recordStatusChange(
-                applicationCase, "Decision Recommendation Agent", previousStatus, CaseStatus.READY_FOR_REVIEW);
-        applicationCaseRepository.save(applicationCase);
+            CaseStatus previousStatus = applicationCase.getStatus();
+            applicationCase.setRecommendation(generatedRecommendation.recommendation());
+            applicationCase.setRecommendationReason(generatedRecommendation.reason());
+            auditLogService.record(
+                    applicationCase,
+                    "Decision Recommendation Agent",
+                    "RECOMMENDATION",
+                    GeminiCallMetrics.appendToDetail(
+                            generatedRecommendation.recommendation().name()
+                                    + ": "
+                                    + generatedRecommendation.reason(),
+                            geminiMetrics));
+            auditLogService.recordStatusChange(
+                    applicationCase, "Decision Recommendation Agent", previousStatus, CaseStatus.READY_FOR_REVIEW);
+            applicationCaseRepository.save(applicationCase);
 
-        return toDetail(applicationCase);
+            log.info(
+                    "agent.step.success caseId={} step=recommendation durationMs={} recommendation={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    generatedRecommendation.recommendation());
+            return toDetail(applicationCase);
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "agent.step.failed caseId={} step=recommendation durationMs={} error={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    exception.getMessage());
+            throw exception;
+        }
     }
 
     @Transactional
@@ -281,30 +305,53 @@ public class CaseService {
                     "Case status does not allow clarification: " + applicationCase.getStatus());
         }
 
-        runValidations(applicationCase);
-        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
-        List<String> topics = clarificationRequestAgent.collectTopics(applicationCase, validation);
-        if (topics.isEmpty()) {
-            throw new CaseClarificationException("No missing or ambiguous fields require clarification");
+        long startedNanos = System.nanoTime();
+        log.info("agent.step.start caseId={} step=clarification", caseId);
+        GeminiCallContext.clear();
+        try {
+            runValidations(applicationCase);
+            ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+            List<String> topics = clarificationRequestAgent.collectTopics(applicationCase, validation);
+            if (topics.isEmpty()) {
+                throw new CaseClarificationException("No missing or ambiguous fields require clarification");
+            }
+
+            var draft = clarificationRequestAgent.generateDraft(applicationCase, validation, topics);
+            GeminiCallMetrics geminiMetrics = GeminiCallContext.consume();
+            CaseStatus previousStatus = applicationCase.getStatus();
+            auditLogService.record(
+                    applicationCase,
+                    "Clarification Request Agent",
+                    "CLARIFICATION_DRAFT",
+                    GeminiCallMetrics.appendToDetail(
+                            "Generated draft for " + topics.size() + " topic(s): " + String.join("; ", topics),
+                            geminiMetrics));
+            auditLogService.recordStatusChange(
+                    applicationCase,
+                    "Clarification Request Agent",
+                    previousStatus,
+                    CaseStatus.CLARIFICATION_REQUESTED);
+            applicationCaseRepository.save(applicationCase);
+
+            log.info(
+                    "agent.step.success caseId={} step=clarification durationMs={} topics={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    topics.size());
+            return new ClarificationDraftResponse(
+                    applicationCase.getCaseId(),
+                    applicationCase.getStatus(),
+                    applicationCase.getStudentName(),
+                    draft.subject(),
+                    draft.body());
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "agent.step.failed caseId={} step=clarification durationMs={} error={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    exception.getMessage());
+            throw exception;
         }
-
-        var draft = clarificationRequestAgent.generateDraft(applicationCase, validation, topics);
-        CaseStatus previousStatus = applicationCase.getStatus();
-        auditLogService.record(
-                applicationCase,
-                "Clarification Request Agent",
-                "CLARIFICATION_DRAFT",
-                "Generated draft for " + topics.size() + " topic(s): " + String.join("; ", topics));
-        auditLogService.recordStatusChange(
-                applicationCase, "Clarification Request Agent", previousStatus, CaseStatus.CLARIFICATION_REQUESTED);
-        applicationCaseRepository.save(applicationCase);
-
-        return new ClarificationDraftResponse(
-                applicationCase.getCaseId(),
-                applicationCase.getStatus(),
-                applicationCase.getStudentName(),
-                draft.subject(),
-                draft.body());
     }
 
     @Transactional
@@ -331,26 +378,47 @@ public class CaseService {
             throw new CaseSupervisorVerificationException("Supervisor name is required for verification");
         }
 
-        runValidations(applicationCase);
-        ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
-        var draft = supervisorVerificationAgent.generateDraft(applicationCase, validation);
-        CaseStatus previousStatus = applicationCase.getStatus();
-        auditLogService.record(
-                applicationCase,
-                "Supervisor Verification Agent",
-                "SUPERVISOR_VERIFICATION_DRAFT",
-                "Generated draft for " + applicationCase.getSupervisorEmail());
-        auditLogService.recordStatusChange(
-                applicationCase, "Supervisor Verification Agent", previousStatus, CaseStatus.PENDING_SUPERVISOR);
-        applicationCaseRepository.save(applicationCase);
+        long startedNanos = System.nanoTime();
+        log.info("agent.step.start caseId={} step=supervisor_verification", caseId);
+        GeminiCallContext.clear();
+        try {
+            runValidations(applicationCase);
+            ValidationSummaryDto validation = toValidationSummary(applicationCase.getValidationResults());
+            var draft = supervisorVerificationAgent.generateDraft(applicationCase, validation);
+            GeminiCallMetrics geminiMetrics = GeminiCallContext.consume();
+            CaseStatus previousStatus = applicationCase.getStatus();
+            auditLogService.record(
+                    applicationCase,
+                    "Supervisor Verification Agent",
+                    "SUPERVISOR_VERIFICATION_DRAFT",
+                    GeminiCallMetrics.appendToDetail(
+                            "Generated draft for " + applicationCase.getSupervisorEmail(), geminiMetrics));
+            auditLogService.recordStatusChange(
+                    applicationCase,
+                    "Supervisor Verification Agent",
+                    previousStatus,
+                    CaseStatus.PENDING_SUPERVISOR);
+            applicationCaseRepository.save(applicationCase);
 
-        return new SupervisorVerificationDraftResponse(
-                applicationCase.getCaseId(),
-                applicationCase.getStatus(),
-                applicationCase.getSupervisorName(),
-                applicationCase.getSupervisorEmail(),
-                draft.subject(),
-                draft.body());
+            log.info(
+                    "agent.step.success caseId={} step=supervisor_verification durationMs={}",
+                    caseId,
+                    elapsedMs(startedNanos));
+            return new SupervisorVerificationDraftResponse(
+                    applicationCase.getCaseId(),
+                    applicationCase.getStatus(),
+                    applicationCase.getSupervisorName(),
+                    applicationCase.getSupervisorEmail(),
+                    draft.subject(),
+                    draft.body());
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "agent.step.failed caseId={} step=supervisor_verification durationMs={} error={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    exception.getMessage());
+            throw exception;
+        }
     }
 
     @Transactional
@@ -429,30 +497,61 @@ public class CaseService {
                 applicationCase, "Document Extraction Agent", previousStatus, CaseStatus.EXTRACTING);
         applicationCaseRepository.save(applicationCase);
 
-        byte[] pdfBytes = documentStorageService.readBytes(document.getStoragePath());
-        ExtractedApplicationData extractedData = documentExtractionAgent.extract(pdfBytes);
+        long startedNanos = System.nanoTime();
+        log.info("agent.step.start caseId={} step=extraction", caseId);
+        GeminiCallContext.clear();
+        try {
+            byte[] pdfBytes = documentStorageService.readBytes(document.getStoragePath());
+            ExtractedApplicationData extractedData = documentExtractionAgent.extract(pdfBytes);
+            GeminiCallMetrics geminiMetrics = GeminiCallContext.consume();
 
-        applyExtractedData(applicationCase, extractedData);
-        document.setPageCount(pdfPageCounter.countPages(pdfBytes));
-        auditLogService.record(
-                applicationCase,
-                "Document Extraction Agent",
-                "EXTRACTION_COMPLETED",
-                summarizeExtraction(extractedData));
-        runValidations(applicationCase);
-        auditLogService.recordStatusChange(
-                applicationCase, "Document Extraction Agent", CaseStatus.EXTRACTING, CaseStatus.NEW);
-        applicationCaseRepository.save(applicationCase);
+            applyExtractedData(applicationCase, extractedData);
+            document.setPageCount(pdfPageCounter.countPages(pdfBytes));
+            auditLogService.record(
+                    applicationCase,
+                    "Document Extraction Agent",
+                    "EXTRACTION_COMPLETED",
+                    GeminiCallMetrics.appendToDetail(summarizeExtraction(extractedData), geminiMetrics));
+            runValidations(applicationCase);
+            auditLogService.recordStatusChange(
+                    applicationCase, "Document Extraction Agent", CaseStatus.EXTRACTING, CaseStatus.NEW);
+            applicationCaseRepository.save(applicationCase);
 
-        return toDetail(applicationCase);
+            log.info(
+                    "agent.step.success caseId={} step=extraction durationMs={}",
+                    caseId,
+                    elapsedMs(startedNanos));
+            return toDetail(applicationCase);
+        } catch (RuntimeException exception) {
+            GeminiCallContext.consume();
+            log.warn(
+                    "agent.step.failed caseId={} step=extraction durationMs={} error={}",
+                    caseId,
+                    elapsedMs(startedNanos),
+                    exception.getMessage());
+            throw exception;
+        }
     }
 
     private void runValidations(ApplicationCase applicationCase) {
+        long startedNanos = System.nanoTime();
+        UUID caseId = applicationCase.getCaseId();
+        log.info("agent.step.start caseId={} step=validation", caseId);
         ValidationResult completeness = completenessValidationAgent.validate(applicationCase);
         ValidationResult rules = universityRulesAgent.validate(applicationCase);
         upsertValidationResult(applicationCase, completeness);
         upsertValidationResult(applicationCase, rules);
         auditLogService.recordValidationResults(applicationCase, completeness, rules);
+        log.info(
+                "agent.step.success caseId={} step=validation durationMs={} completenessPassed={} rulesPassed={}",
+                caseId,
+                elapsedMs(startedNanos),
+                completeness.isPassed(),
+                rules.isPassed());
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000L;
     }
 
     private void upsertValidationResult(ApplicationCase applicationCase, ValidationResult validationResult) {
