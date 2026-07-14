@@ -68,7 +68,7 @@ The 6 agents from the TDD are implemented in the backend as logical steps/servic
               Approve / Reject / Request Clarification
 ```
 
-Every step is written to the **audit log** (TDD: full traceability).
+Every step is written to the **audit log** (TDD: full traceability). Gemini-backed steps also append call metrics (`latencyMs`, token counts) to the audit `detail`, and the backend emits structured `agent.step.*` / `gemini.call.*` logs for ops observability (no LangSmith — that targets LangGraph stacks).
 
 ## 5. Data Model
 
