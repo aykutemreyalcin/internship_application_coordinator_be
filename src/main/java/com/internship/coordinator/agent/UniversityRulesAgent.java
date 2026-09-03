@@ -2,6 +2,7 @@ package com.internship.coordinator.agent;
 
 import com.internship.coordinator.config.UniversityRulesProperties;
 import com.internship.coordinator.model.ApplicationCase;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.model.IssueSeverity;
 import com.internship.coordinator.model.ValidationIssue;
 import com.internship.coordinator.model.ValidationResult;
@@ -20,14 +21,30 @@ public class UniversityRulesAgent {
     private final UniversityRulesProperties rules;
     private final Pattern studentIdPattern;
     private final Pattern supervisorEmailPattern;
+    private final LearningOutcomesReportRulesAgent learningOutcomesReportRulesAgent;
+    private final InternshipJournalRulesAgent internshipJournalRulesAgent;
 
-    public UniversityRulesAgent(UniversityRulesProperties rules) {
+    public UniversityRulesAgent(
+            UniversityRulesProperties rules,
+            LearningOutcomesReportRulesAgent learningOutcomesReportRulesAgent,
+            InternshipJournalRulesAgent internshipJournalRulesAgent) {
         this.rules = rules;
         this.studentIdPattern = compilePattern(rules.fields().studentIdPattern());
         this.supervisorEmailPattern = compilePattern(rules.fields().supervisorEmailPattern());
+        this.learningOutcomesReportRulesAgent = learningOutcomesReportRulesAgent;
+        this.internshipJournalRulesAgent = internshipJournalRulesAgent;
     }
 
     public ValidationResult validate(ApplicationCase applicationCase) {
+        CaseType caseType = applicationCase.getCaseType() == null ? CaseType.APPLICATION : applicationCase.getCaseType();
+        return switch (caseType) {
+            case LEARNING_OUTCOMES_REPORT -> learningOutcomesReportRulesAgent.validate(applicationCase);
+            case INTERNSHIP_JOURNAL -> internshipJournalRulesAgent.validate(applicationCase);
+            case APPLICATION -> validateApplication(applicationCase);
+        };
+    }
+
+    private ValidationResult validateApplication(ApplicationCase applicationCase) {
         List<ValidationIssue> issues = new ArrayList<>();
         validateInternshipRules(applicationCase, issues);
         validateFieldFormats(applicationCase, issues);

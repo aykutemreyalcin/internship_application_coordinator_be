@@ -8,6 +8,7 @@ Java 21 + Spring Boot API with Vertex AI (Gemini) agents for internship applicat
 |----------|-------------|
 | [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) | Architecture, API contract, shared FE/BE setup |
 | [BACKEND_TASKS.md](./BACKEND_TASKS.md) | Backend task plan |
+| [BACKEND_TASKS_INTERNSHIP_DOCUMENTS.md](./BACKEND_TASKS_INTERNSHIP_DOCUMENTS.md) | Internship documents module tasks |
 | [docs/TEST_REPORT.template.md](./docs/TEST_REPORT.template.md) | Fillable 40-case evaluation report (extraction & rule metrics) |
 
 ## Prerequisites
@@ -76,8 +77,31 @@ Place the service account JSON under `credentials/` (gitignored). Never commit r
 | `UNIVERSITY_RULES_CONFIG_PATH` | `classpath:university-rules.json` | Rules engine config |
 | `EMAIL_INTAKE_ENABLED` | `false` | IMAP email intake (BE-16) |
 | `TEST_DATASET_ENABLED` | `false` | 40-case seed endpoints (BE-18) |
+| `INTERNSHIP_DOCUMENT_RULES_CONFIG_PATH` | `classpath:internship-document-rules.json` | Report/journal validation rules |
 
 See [.env.example](./.env.example) for the full list including Gmail IMAP settings.
+
+### Internship documents (report + journal)
+
+Upload with `caseType` — **PDF or DOCX only**, no email agents:
+
+```bash
+curl -X POST http://localhost:8080/api/cases \
+  -F "file=@report.docx" \
+  -F "caseType=LEARNING_OUTCOMES_REPORT"
+
+curl -X POST http://localhost:8080/api/cases \
+  -F "file=@journal.docx" \
+  -F "caseType=INTERNSHIP_JOURNAL"
+```
+
+Then extract, validate, recommend, and decide using the same `/cases/{id}/*` endpoints as applications.
+
+Demo seed (requires `TEST_DATASET_ENABLED=true`):
+
+```bash
+curl -X POST http://localhost:8080/api/internal/internship-documents/seed
+```
 
 ### 3. Start PostgreSQL
 

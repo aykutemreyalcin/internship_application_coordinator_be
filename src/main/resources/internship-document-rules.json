@@ -1,0 +1,13 @@
+{
+  "learningOutcomesReport": {
+    "minDurationDays": 84,
+    "minWaysOfAchievingLength": 20,
+    "requireSupervisorSignature": true
+  },
+  "internshipJournal": {
+    "minWeeklyHours": 30,
+    "maxDailyHours": 8,
+    "minTotalHours": 360,
+    "minWaysOfAchievingLength": 10
+  }
+}

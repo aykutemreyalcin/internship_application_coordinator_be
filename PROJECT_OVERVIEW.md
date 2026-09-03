@@ -77,6 +77,7 @@ Every step is written to the **audit log** (TDD: full traceability). Gemini-back
 | Field | Type | Description |
 |-------|------|-------------|
 | `caseId` | UUID | Primary key |
+| `caseType` | enum | `APPLICATION`, `LEARNING_OUTCOMES_REPORT`, `INTERNSHIP_JOURNAL` |
 | `status` | enum | `NEW`, `EXTRACTING`, `NEEDS_CLARIFICATION`, `PENDING_SUPERVISOR`, `READY_FOR_REVIEW`, `APPROVED`, `REJECTED`, `CLARIFICATION_REQUESTED` |
 | `studentName` | string | |
 | `studentId` | string | |
@@ -88,9 +89,10 @@ Every step is written to the **audit log** (TDD: full traceability). Gemini-back
 | `fieldOfStudy` | string | |
 | `recommendation` | enum | `APPROVE`, `REJECT`, `CLARIFY`, `null` |
 | `recommendationReason` | text | Gemini reasoning |
+| `extractedPayload` | JSON | Type-specific fields for report/journal cases (see below) |
 | `createdAt` / `updatedAt` | timestamp | |
 
-**ApplicationDocument** — `id`, `caseId`, `fileName`, `storagePath`, `pageCount`, `uploadedAt`  
+**ApplicationDocument** — `id`, `caseId`, `fileName`, `storagePath`, `contentType`, `pageCount`, `uploadedAt`  
 **ValidationResult** — `id`, `caseId`, `type` (`COMPLETENESS`/`RULES`), `passed` (bool), `issues` (list: field, message, severity)  
 **AuditLogEntry** — `id`, `caseId`, `actor` (`SYSTEM`/`COORDINATOR`/agent name), `action`, `detail`, `timestamp`
 
@@ -102,23 +104,42 @@ Base URL (local): `http://localhost:8080/api`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/cases` | New application (multipart: PDF file). Creates case, status `NEW`. |
-| `GET` | `/cases` | Case list. Query: `?status=&search=&page=&size=` |
-| `GET` | `/cases/{id}` | Case detail (fields + validation + recommendation) |
+| `POST` | `/cases` | New case (multipart: `file` + optional `caseType`, default `APPLICATION`). Accepts **PDF or DOCX**. |
+| `GET` | `/cases` | Case list. Query: `?status=&caseType=&search=&page=&size=` |
+| `GET` | `/cases/{id}` | Case detail (fields + `extractedPayload` + validation + recommendation) |
 | `POST` | `/cases/{id}/extract` | Triggers extraction (Gemini). Status `EXTRACTING` → result. |
 | `GET` | `/cases/{id}/validation` | Completeness + rules results |
 | `POST` | `/cases/{id}/recommendation` | Generates recommendation (Gemini) |
 | `POST` | `/cases/{id}/decision` | Coordinator decision. Body: `{ decision: "APPROVE"\|"REJECT"\|"CLARIFY", note }` |
-| `POST` | `/cases/{id}/clarification` | Generates/sends clarification email draft to student |
-| `POST` | `/cases/{id}/supervisor-verification` | Generates/sends supervisor verification email draft |
+| `POST` | `/cases/{id}/clarification` | Clarification email draft — **APPLICATION cases only** (400 for document types) |
+| `POST` | `/cases/{id}/supervisor-verification` | Supervisor email draft — **APPLICATION cases only** (400 for document types) |
 | `GET` | `/cases/{id}/audit` | Audit log (timeline) |
-| `GET` | `/cases/{id}/documents/{docId}` | Download/preview PDF |
+| `GET` | `/cases/{id}/documents/{docId}` | Download/preview document (PDF or DOCX) |
+
+### Internship Documents module
+
+Two additional `caseType` values reuse the same case pipeline **without email agents**:
+
+| `caseType` | Document |
+|------------|----------|
+| `LEARNING_OUTCOMES_REPORT` | Report on achievement of learning outcomes |
+| `INTERNSHIP_JOURNAL` | Student internship journal (weekly timesheets) |
+
+**`extractedPayload` shapes:**
+
+- **Report:** `learningOutcomes[]` (`code`, `description`, `waysOfAchieving`), signature flags, Dean section fields
+- **Journal:** header fields + `weeklyEntries[]` with daily `workingHours` and `activities`
+
+Rules config: `classpath:internship-document-rules.json`
+
+Seed (when `TEST_DATASET_ENABLED=true`): `POST /api/internal/internship-documents/seed`
 
 **Example `GET /cases/{id}` response:**
 
 ```json
 {
   "caseId": "a1b2c3d4-...",
+  "caseType": "APPLICATION",
   "status": "READY_FOR_REVIEW",
   "studentName": "Jan Kowalski",
   "studentId": "123456",

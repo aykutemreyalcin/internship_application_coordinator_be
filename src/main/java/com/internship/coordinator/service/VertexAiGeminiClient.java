@@ -67,6 +67,13 @@ public class VertexAiGeminiClient implements GeminiClient {
         });
     }
 
+    @Override
+    public String generateJsonFromDocumentText(String documentText, String prompt) {
+        String combinedPrompt =
+                prompt + "\n\nDocument text:\n\"\"\"\n" + documentText + "\n\"\"\"";
+        return generateJson(combinedPrompt);
+    }
+
     private String execute(String operation, GeminiCall call) {
         long startedNanos = System.nanoTime();
         String model = vertexAiProperties.modelName();

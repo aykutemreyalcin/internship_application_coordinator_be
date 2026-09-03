@@ -1,8 +1,11 @@
 package com.internship.coordinator.agent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.internship.coordinator.config.InternshipDocumentRulesProperties;
 import com.internship.coordinator.config.UniversityRulesProperties;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ValidationType;
+import com.internship.coordinator.service.ExtractedPayloadService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +20,15 @@ class UniversityRulesAgentTest {
 
     @BeforeEach
     void setUp() {
-        agent = new UniversityRulesAgent(defaultRules());
+        ExtractedPayloadService extractedPayloadService = new ExtractedPayloadService(new ObjectMapper());
+        InternshipDocumentRulesProperties documentRules = new InternshipDocumentRulesProperties(
+                "classpath:internship-document-rules.json",
+                new InternshipDocumentRulesProperties.LearningOutcomesReportRules(84, 20, true),
+                new InternshipDocumentRulesProperties.InternshipJournalRules(30, 8, 360, 10));
+        agent = new UniversityRulesAgent(
+                defaultRules(),
+                new LearningOutcomesReportRulesAgent(extractedPayloadService, documentRules),
+                new InternshipJournalRulesAgent(extractedPayloadService, documentRules));
     }
 
     @Test

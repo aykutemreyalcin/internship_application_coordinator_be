@@ -1,8 +1,11 @@
 package com.internship.coordinator.agent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.internship.coordinator.config.InternshipDocumentRulesProperties;
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.ValidationResult;
 import com.internship.coordinator.model.ValidationType;
+import com.internship.coordinator.service.ExtractedPayloadService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +20,11 @@ class CompletenessValidationAgentTest {
 
     @BeforeEach
     void setUp() {
-        agent = new CompletenessValidationAgent();
+        ExtractedPayloadService extractedPayloadService = new ExtractedPayloadService(new ObjectMapper());
+        InternshipDocumentRulesProperties rules = documentRules();
+        agent = new CompletenessValidationAgent(
+                new LearningOutcomesReportCompletenessAgent(extractedPayloadService, rules),
+                new InternshipJournalCompletenessAgent(extractedPayloadService));
     }
 
     @Test
@@ -70,5 +77,12 @@ class CompletenessValidationAgentTest {
                 .internshipStartDate(LocalDate.of(2026, 6, 1))
                 .internshipEndDate(LocalDate.of(2026, 11, 30))
                 .build();
+    }
+
+    private InternshipDocumentRulesProperties documentRules() {
+        return new InternshipDocumentRulesProperties(
+                "classpath:internship-document-rules.json",
+                new InternshipDocumentRulesProperties.LearningOutcomesReportRules(84, 20, true),
+                new InternshipDocumentRulesProperties.InternshipJournalRules(30, 8, 360, 10));
     }
 }

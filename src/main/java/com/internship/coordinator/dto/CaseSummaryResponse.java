@@ -1,12 +1,14 @@
 package com.internship.coordinator.dto;
 
 import com.internship.coordinator.model.CaseStatus;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.model.Recommendation;
 import java.time.Instant;
 import java.util.UUID;
 
 public record CaseSummaryResponse(
         UUID caseId,
+        CaseType caseType,
         CaseStatus status,
         String studentName,
         String studentId,

@@ -9,6 +9,7 @@ import com.internship.coordinator.dto.PageResponse;
 import com.internship.coordinator.dto.SupervisorVerificationDraftResponse;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.CaseStatus;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.service.CaseService;
 import com.internship.coordinator.service.StoredDocument;
 import jakarta.validation.Valid;
@@ -49,18 +50,22 @@ public class CaseController {
     @GetMapping
     public PageResponse<CaseSummaryResponse> listCases(
             @RequestParam(required = false) CaseStatus status,
+            @RequestParam(required = false) CaseType caseType,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return caseService.listCases(
                 status,
+                caseType,
                 search,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<CaseDetailResponse> createCase(@RequestPart("file") MultipartFile file) {
-        CaseDetailResponse response = caseService.createCaseWithPdf(file);
+    public ResponseEntity<CaseDetailResponse> createCase(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(required = false, defaultValue = "APPLICATION") CaseType caseType) {
+        CaseDetailResponse response = caseService.createCaseWithDocument(file, caseType);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -108,8 +113,9 @@ public class CaseController {
     @GetMapping("/{id}/documents/{docId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id, @PathVariable UUID docId) {
         StoredDocument storedDocument = caseService.getDocument(id, docId);
+        MediaType mediaType = MediaType.parseMediaType(storedDocument.contentType());
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
+                .contentType(mediaType)
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
                         "inline; filename=\"" + storedDocument.fileName() + "\"")

@@ -12,6 +12,7 @@ import com.internship.coordinator.service.DocumentNotFoundException;
 import com.internship.coordinator.service.EmailIntakeException;
 import com.internship.coordinator.service.ExtractionParseException;
 import com.internship.coordinator.service.GeminiException;
+import com.internship.coordinator.service.InvalidCaseTypeException;
 import com.internship.coordinator.service.InvalidFileException;
 import com.internship.coordinator.service.RecommendationParseException;
 import com.internship.coordinator.service.SupervisorVerificationParseException;
@@ -44,7 +45,8 @@ public class GlobalExceptionHandler {
         CaseRecommendationException.class,
         CaseClarificationException.class,
         CaseSupervisorVerificationException.class,
-        CaseDecisionException.class
+        CaseDecisionException.class,
+        InvalidCaseTypeException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
