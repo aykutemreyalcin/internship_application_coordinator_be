@@ -43,7 +43,7 @@ Mark secrets as **encrypted** in Coolify.
 
 ## 4. Deploy branch
 
-Use branch `be/docker-email-intake-fixes` (or `main` after merge), not an old commit without Docker fixes.
+Deploy from `main`. If the Docker build fails during Maven dependency download, ensure the server has at least **2 GB RAM** free for the build container, then redeploy (the Dockerfile uses `dependency:resolve` instead of `dependency:go-offline` to reduce memory use).
 
 ## 5. Verify
 

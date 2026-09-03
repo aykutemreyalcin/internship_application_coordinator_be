@@ -1,12 +1,19 @@
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
 
+# go-offline pulls the entire transitive graph and often OOMs on small Coolify builders.
+ENV MAVEN_OPTS="-Xmx768m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN ./mvnw dependency:go-offline -B
+
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B dependency:resolve dependency:resolve-plugins -DskipTests
 
 COPY src ./src
-RUN ./mvnw clean package -DskipTests -B && cp target/*.jar app.jar
+
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B clean package -DskipTests && cp target/*.jar app.jar
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
