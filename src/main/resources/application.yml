@@ -34,7 +34,7 @@ app:
   email-intake:
     enabled: ${EMAIL_INTAKE_ENABLED:false}
     mode: ${EMAIL_INTAKE_MODE:imap}
-    poll-interval-seconds: ${EMAIL_INTAKE_POLL_INTERVAL_SECONDS:60}
+    poll-interval-seconds: ${EMAIL_INTAKE_POLL_INTERVAL_SECONDS:3600}
     imap:
       host: ${GMAIL_IMAP_HOST:imap.gmail.com}
       port: ${GMAIL_IMAP_PORT:993}

@@ -17,7 +17,7 @@ public class EmailIntakeScheduler {
     private final EmailIntakeAgent emailIntakeAgent;
     private final EmailIntakeProperties emailIntakeProperties;
 
-    @Scheduled(fixedDelayString = "${app.email-intake.poll-interval-seconds:60}000")
+    @Scheduled(fixedDelayString = "${app.email-intake.poll-interval-seconds:3600}000")
     public void pollMailbox() {
         log.debug("Polling mailbox for internship application emails");
         try {
