@@ -70,7 +70,7 @@ class InternshipDocumentsControllerTest {
                 .getContentAsString();
         UUID id = UUID.fromString(new ObjectMapper().readTree(caseId).get("caseId").asText());
 
-        when(learningOutcomesReportExtractionAgent.extractFromText(anyString()))
+        when(learningOutcomesReportExtractionAgent.extractFromDocx(any(byte[].class)))
                 .thenReturn(new ExtractedLearningOutcomesReportData(
                         "Jan Kowalski",
                         "123456",
@@ -149,7 +149,7 @@ class InternshipDocumentsControllerTest {
                 .getContentAsString();
         UUID id = UUID.fromString(new ObjectMapper().readTree(response).get("caseId").asText());
 
-        when(internshipJournalExtractionAgent.extractFromText(anyString()))
+        when(internshipJournalExtractionAgent.extractFromDocx(any(byte[].class)))
                 .thenReturn(new ExtractedInternshipJournalData(
                         "Jan Kowalski",
                         "123456",
@@ -199,7 +199,7 @@ class InternshipDocumentsControllerTest {
                         .content(decisionBody))
                 .andExpect(status().isBadRequest());
 
-        when(learningOutcomesReportExtractionAgent.extractFromText(anyString()))
+        when(learningOutcomesReportExtractionAgent.extractFromDocx(any(byte[].class)))
                 .thenReturn(new ExtractedLearningOutcomesReportData(
                         "Jan Kowalski",
                         "123456",

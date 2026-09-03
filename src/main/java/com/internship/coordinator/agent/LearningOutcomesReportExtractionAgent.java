@@ -46,6 +46,17 @@ public class LearningOutcomesReportExtractionAgent {
         }
     }
 
+    public ExtractedLearningOutcomesReportData extractFromDocx(byte[] docxBytes) {
+        try {
+            String json = geminiClient.generateFromDocx(docxBytes, EXTRACTION_PROMPT);
+            return objectMapper.readValue(stripCodeFence(json), ExtractedLearningOutcomesReportData.class);
+        } catch (JsonProcessingException exception) {
+            throw new ExtractionParseException("Failed to parse report extraction response", exception);
+        } catch (GeminiException exception) {
+            throw exception;
+        }
+    }
+
     public ExtractedLearningOutcomesReportData extractFromText(String documentText) {
         try {
             String json = geminiClient.generateJsonFromDocumentText(documentText, EXTRACTION_PROMPT);

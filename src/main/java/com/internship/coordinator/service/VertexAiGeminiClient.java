@@ -8,6 +8,7 @@ import com.google.cloud.vertexai.generativeai.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.PartMaker;
 import com.google.cloud.vertexai.generativeai.ResponseHandler;
 import com.internship.coordinator.config.VertexAiProperties;
+import com.internship.coordinator.service.DocumentFileValidator;
 import java.io.IOException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -53,7 +54,17 @@ public class VertexAiGeminiClient implements GeminiClient {
 
     @Override
     public String generateFromPdf(byte[] pdfBytes, String prompt) {
-        return execute("pdf", () -> {
+        return generateFromBinaryDocument(pdfBytes, "application/pdf", "pdf", prompt);
+    }
+
+    @Override
+    public String generateFromDocx(byte[] docxBytes, String prompt) {
+        return generateFromBinaryDocument(
+                docxBytes, DocumentFileValidator.DOCX_CONTENT_TYPE, "docx", prompt);
+    }
+
+    private String generateFromBinaryDocument(byte[] bytes, String mimeType, String operation, String prompt) {
+        return execute(operation, () -> {
             GenerativeModel extractionModel = new GenerativeModel.Builder()
                     .setModelName(vertexAiProperties.modelName())
                     .setVertexAi(vertexAI)
@@ -63,7 +74,7 @@ public class VertexAiGeminiClient implements GeminiClient {
                     .build();
 
             return extractionModel.generateContent(ContentMaker.fromMultiModalData(
-                    prompt, PartMaker.fromMimeTypeAndData("application/pdf", pdfBytes)));
+                    prompt, PartMaker.fromMimeTypeAndData(mimeType, bytes)));
         });
     }
 

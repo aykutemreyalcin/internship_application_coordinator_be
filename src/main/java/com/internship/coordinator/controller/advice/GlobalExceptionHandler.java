@@ -9,6 +9,7 @@ import com.internship.coordinator.service.CaseRecommendationException;
 import com.internship.coordinator.service.CaseSupervisorVerificationException;
 import com.internship.coordinator.service.ClarificationParseException;
 import com.internship.coordinator.service.DocumentNotFoundException;
+import com.internship.coordinator.service.DocumentStorageException;
 import com.internship.coordinator.service.EmailIntakeException;
 import com.internship.coordinator.service.ExtractionParseException;
 import com.internship.coordinator.service.GeminiException;
@@ -22,6 +23,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -34,7 +36,9 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({CaseNotFoundException.class, DocumentNotFoundException.class})
+    @ExceptionHandler(
+            value = {CaseNotFoundException.class, DocumentNotFoundException.class, DocumentStorageException.class},
+            produces = MediaType.ALL_VALUE)
     public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException exception, HttpServletRequest request) {
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
@@ -95,7 +99,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
-    @ExceptionHandler(Exception.class)
+    @ExceptionHandler(value = Exception.class, produces = MediaType.ALL_VALUE)
     public ResponseEntity<ApiErrorResponse> handleUnexpectedException(
             Exception exception, HttpServletRequest request) {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
@@ -105,6 +109,6 @@ public class GlobalExceptionHandler {
             HttpStatus status, String message, HttpServletRequest request) {
         ApiErrorResponse body = new ApiErrorResponse(
                 Instant.now(), status.value(), status.getReasonPhrase(), message, request.getRequestURI());
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(body);
     }
 }

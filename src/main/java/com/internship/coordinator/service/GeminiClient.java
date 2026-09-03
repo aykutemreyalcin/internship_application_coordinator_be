@@ -8,5 +8,7 @@ public interface GeminiClient {
 
     String generateFromPdf(byte[] pdfBytes, String prompt);
 
+    String generateFromDocx(byte[] docxBytes, String prompt);
+
     String generateJsonFromDocumentText(String documentText, String prompt);
 }

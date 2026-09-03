@@ -16,6 +16,9 @@ public class InternshipJournalExtractionAgent {
     static final String EXTRACTION_PROMPT =
             """
             Extract structured data from this Student Internship Journal document.
+            IMPORTANT: First read the header/metadata section at the top of the document (student name, student ID,
+            faculty, field of study, study form, academic year, company, company address, supervisor, internship dates).
+            These fields are often in labeled form fields or the first table rows before the weekly timesheets.
             Return ONLY a JSON object with exactly these keys:
             studentName, studentId, faculty, fieldOfStudy, studyForm (FULL_TIME or PART_TIME),
             academicYear, companyName, companyAddress, internshipStartDate, internshipEndDate,
@@ -35,6 +38,17 @@ public class InternshipJournalExtractionAgent {
     public ExtractedInternshipJournalData extractFromPdf(byte[] pdfBytes) {
         try {
             String json = geminiClient.generateFromPdf(pdfBytes, EXTRACTION_PROMPT);
+            return objectMapper.readValue(stripCodeFence(json), ExtractedInternshipJournalData.class);
+        } catch (JsonProcessingException exception) {
+            throw new ExtractionParseException("Failed to parse journal extraction response", exception);
+        } catch (GeminiException exception) {
+            throw exception;
+        }
+    }
+
+    public ExtractedInternshipJournalData extractFromDocx(byte[] docxBytes) {
+        try {
+            String json = geminiClient.generateFromDocx(docxBytes, EXTRACTION_PROMPT);
             return objectMapper.readValue(stripCodeFence(json), ExtractedInternshipJournalData.class);
         } catch (JsonProcessingException exception) {
             throw new ExtractionParseException("Failed to parse journal extraction response", exception);

@@ -72,7 +72,7 @@ Place the service account JSON under `credentials/` (gitignored). Never commit r
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `UPLOAD_DIR` | `uploads` | PDF storage directory |
+| `UPLOAD_DIR` | `uploads` | PDF/DOCX storage directory. In Docker/Coolify, mount a persistent volume at `/app/uploads` (or set `UPLOAD_DIR`) so files survive redeploys. |
 | `MAX_UPLOAD_SIZE_BYTES` | `10485760` | Max upload size (10 MB) |
 | `UNIVERSITY_RULES_CONFIG_PATH` | `classpath:university-rules.json` | Rules engine config |
 | `EMAIL_INTAKE_ENABLED` | `false` | IMAP email intake (BE-16) |
