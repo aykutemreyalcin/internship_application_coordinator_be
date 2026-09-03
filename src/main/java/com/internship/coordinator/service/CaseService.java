@@ -35,6 +35,7 @@ import com.internship.coordinator.repository.ApplicationCaseRepository;
 import com.internship.coordinator.repository.ApplicationDocumentRepository;
 import com.internship.coordinator.repository.AuditLogEntryRepository;
 import com.internship.coordinator.util.CaseStateMachine;
+import com.internship.coordinator.util.DocxTextExtractor;
 import com.internship.coordinator.util.PdfPageCounter;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -87,6 +88,7 @@ public class CaseService {
     private final DocumentFileValidator documentFileValidator;
     private final PdfFileValidator pdfFileValidator;
     private final ExtractedPayloadService extractedPayloadService;
+    private final DocxTextExtractor docxTextExtractor;
     private final ObjectProvider<DocumentExtractionAgent> documentExtractionAgentProvider;
     private final ObjectProvider<LearningOutcomesReportExtractionAgent> learningOutcomesReportExtractionAgentProvider;
     private final ObjectProvider<InternshipJournalExtractionAgent> internshipJournalExtractionAgentProvider;
@@ -631,7 +633,7 @@ public class CaseService {
         }
         ExtractedLearningOutcomesReportData extractedData = isPdfDocument(document)
                 ? agent.extractFromPdf(documentBytes)
-                : agent.extractFromDocx(documentBytes);
+                : extractReportFromDocx(agent, documentBytes);
         applyReportExtractedData(applicationCase, extractedData);
         return new ExtractionSummary(null, extractedData, summarizeReportExtraction(extractedData));
     }
@@ -644,9 +646,33 @@ public class CaseService {
         }
         ExtractedInternshipJournalData extractedData = isPdfDocument(document)
                 ? agent.extractFromPdf(documentBytes)
-                : agent.extractFromDocx(documentBytes);
+                : extractJournalFromDocx(agent, documentBytes);
         applyJournalExtractedData(applicationCase, extractedData);
         return new ExtractionSummary(null, extractedData, summarizeJournalExtraction(extractedData));
+    }
+
+    private ExtractedLearningOutcomesReportData extractReportFromDocx(
+            LearningOutcomesReportExtractionAgent agent, byte[] documentBytes) {
+        try {
+            return agent.extractFromDocx(documentBytes);
+        } catch (RuntimeException multimodalFailure) {
+            log.warn(
+                    "DOCX multimodal report extraction failed, falling back to text: {}",
+                    multimodalFailure.getMessage());
+            return agent.extractFromText(docxTextExtractor.extractText(documentBytes));
+        }
+    }
+
+    private ExtractedInternshipJournalData extractJournalFromDocx(
+            InternshipJournalExtractionAgent agent, byte[] documentBytes) {
+        try {
+            return agent.extractFromDocx(documentBytes);
+        } catch (RuntimeException multimodalFailure) {
+            log.warn(
+                    "DOCX multimodal journal extraction failed, falling back to text: {}",
+                    multimodalFailure.getMessage());
+            return agent.extractFromText(docxTextExtractor.extractText(documentBytes));
+        }
     }
 
     private void applyExtractedData(ApplicationCase applicationCase, ExtractedApplicationData extractedData) {
