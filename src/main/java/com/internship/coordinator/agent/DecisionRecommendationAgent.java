@@ -7,6 +7,7 @@ import com.internship.coordinator.dto.ValidationGroupDto;
 import com.internship.coordinator.dto.ValidationIssueDto;
 import com.internship.coordinator.dto.ValidationSummaryDto;
 import com.internship.coordinator.model.ApplicationCase;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.model.Recommendation;
 import com.internship.coordinator.service.GeminiClient;
 import com.internship.coordinator.service.GeminiException;
@@ -24,18 +25,20 @@ public class DecisionRecommendationAgent {
 
     static final String RECOMMENDATION_PROMPT =
             """
-            You are an internship application coordinator assistant.
-            Review the application fields and validation results below.
+            You are an internship coordinator assistant.
+            Review the case fields and validation results below.
             Return ONLY a JSON object with exactly these keys:
             recommendation (one of APPROVE, REJECT, CLARIFY), reason (short explanation for the coordinator).
 
             Rules:
-            - Use APPROVE when the application is complete and compliant.
+            - Use APPROVE when the document is complete and compliant.
             - Use CLARIFY when information is ambiguous, inconsistent, or needs human follow-up despite passing checks.
             - Use REJECT only when there are clear grounds to reject beyond the automated validation already listed.
+            - For LEARNING_OUTCOMES_REPORT: focus on outcome coverage, supervisor confirmation, and Dean YES/NO consistency.
+            - For INTERNSHIP_JOURNAL: focus on weekly hour totals, activity quality, and period coverage.
             - Keep reason concise (1-2 sentences).
 
-            Application data and validation:
+            Case data and validation:
             """;
 
     private final GeminiClient geminiClient;
@@ -81,6 +84,7 @@ public class DecisionRecommendationAgent {
 
     private String formatContext(ApplicationCase applicationCase, ValidationSummaryDto validation) {
         Map<String, Object> context = new LinkedHashMap<>();
+        context.put("caseType", applicationCase.getCaseType() != null ? applicationCase.getCaseType().name() : CaseType.APPLICATION.name());
         context.put("studentName", applicationCase.getStudentName());
         context.put("studentId", applicationCase.getStudentId());
         context.put("fieldOfStudy", applicationCase.getFieldOfStudy());

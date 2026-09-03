@@ -1,6 +1,7 @@
 package com.internship.coordinator.agent;
 
 import com.internship.coordinator.model.ApplicationCase;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.model.IssueSeverity;
 import com.internship.coordinator.model.ValidationIssue;
 import com.internship.coordinator.model.ValidationResult;
@@ -13,7 +14,26 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompletenessValidationAgent {
 
+    private final LearningOutcomesReportCompletenessAgent learningOutcomesReportCompletenessAgent;
+    private final InternshipJournalCompletenessAgent internshipJournalCompletenessAgent;
+
+    public CompletenessValidationAgent(
+            LearningOutcomesReportCompletenessAgent learningOutcomesReportCompletenessAgent,
+            InternshipJournalCompletenessAgent internshipJournalCompletenessAgent) {
+        this.learningOutcomesReportCompletenessAgent = learningOutcomesReportCompletenessAgent;
+        this.internshipJournalCompletenessAgent = internshipJournalCompletenessAgent;
+    }
+
     public ValidationResult validate(ApplicationCase applicationCase) {
+        CaseType caseType = applicationCase.getCaseType() == null ? CaseType.APPLICATION : applicationCase.getCaseType();
+        return switch (caseType) {
+            case LEARNING_OUTCOMES_REPORT -> learningOutcomesReportCompletenessAgent.validate(applicationCase);
+            case INTERNSHIP_JOURNAL -> internshipJournalCompletenessAgent.validate(applicationCase);
+            case APPLICATION -> validateApplication(applicationCase);
+        };
+    }
+
+    private ValidationResult validateApplication(ApplicationCase applicationCase) {
         List<ValidationIssue> issues = new ArrayList<>();
         checkRequiredString(issues, "studentName", applicationCase.getStudentName(), "Student name is missing");
         checkRequiredString(issues, "studentId", applicationCase.getStudentId(), "Student ID is missing");

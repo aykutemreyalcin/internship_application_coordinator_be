@@ -2,6 +2,7 @@ package com.internship.coordinator.service;
 
 import com.internship.coordinator.model.ApplicationCase;
 import com.internship.coordinator.model.CaseStatus;
+import com.internship.coordinator.model.CaseType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,12 +13,16 @@ final class CaseSpecifications {
     private CaseSpecifications() {
     }
 
-    static Specification<ApplicationCase> withFilters(CaseStatus status, String search) {
+    static Specification<ApplicationCase> withFilters(CaseStatus status, CaseType caseType, String search) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             if (status != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            }
+
+            if (caseType != null) {
+                predicates.add(criteriaBuilder.equal(root.get("caseType"), caseType));
             }
 
             if (search != null && !search.isBlank()) {

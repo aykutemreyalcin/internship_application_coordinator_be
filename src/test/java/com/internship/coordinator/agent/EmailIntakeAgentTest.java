@@ -8,8 +8,9 @@ import com.internship.coordinator.service.CaseService;
 import com.internship.coordinator.service.MailboxClient;
 import com.internship.coordinator.dto.CaseDetailResponse;
 import com.internship.coordinator.model.CaseStatus;
-import com.internship.coordinator.dto.ValidationSummaryDto;
+import com.internship.coordinator.model.CaseType;
 import com.internship.coordinator.dto.ValidationGroupDto;
+import com.internship.coordinator.dto.ValidationSummaryDto;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,7 +133,9 @@ class EmailIntakeAgentTest {
                 new ValidationSummaryDto(new ValidationGroupDto(true, List.of()), new ValidationGroupDto(true, List.of()));
         return new CaseDetailResponse(
                 caseId,
+                CaseType.APPLICATION,
                 status,
+                null,
                 null,
                 null,
                 null,

@@ -45,6 +45,9 @@ public class ApplicationDocument {
     @Column(nullable = false)
     private String storagePath;
 
+    @Column(name = "content_type")
+    private String contentType;
+
     private Integer pageCount;
 
     @CreatedDate

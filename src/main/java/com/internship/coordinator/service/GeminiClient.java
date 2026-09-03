@@ -7,4 +7,6 @@ public interface GeminiClient {
     String generateJson(String prompt);
 
     String generateFromPdf(byte[] pdfBytes, String prompt);
+
+    String generateJsonFromDocumentText(String documentText, String prompt);
 }

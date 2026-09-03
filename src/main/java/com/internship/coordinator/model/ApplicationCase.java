@@ -45,6 +45,14 @@ public class ApplicationCase {
     @Builder.Default
     private CaseStatus status = CaseStatus.NEW;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "case_type", nullable = false)
+    @Builder.Default
+    private CaseType caseType = CaseType.APPLICATION;
+
+    @Column(name = "extracted_payload", columnDefinition = "TEXT")
+    private String extractedPayload;
+
     private String studentName;
 
     private String studentId;
